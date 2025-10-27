@@ -42,6 +42,8 @@ async function init() {
     return;
   }
 
+  buildNavigation();
+
   try {
     const issue = await loadLatestIssuePages(state.config);
     state.imagePaths = issue.imagePaths;
@@ -56,6 +58,48 @@ async function init() {
   } catch (error) {
     console.error('Näköislehden lataaminen epäonnistui:', error);
   }
+}
+
+function buildNavigation() {
+  const container = document.querySelector('.menu-content');
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = '';
+
+  const navigationItems = state.config && Array.isArray(state.config.navigation)
+    ? state.config.navigation
+    : [];
+  navigationItems.forEach(item => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.classList.add('menu-item');
+    if (item.className) {
+      button.classList.add(item.className);
+    }
+    if (item.action) {
+      button.dataset.action = item.action;
+    }
+
+    if (item.label) {
+      const label = document.createElement('span');
+      label.textContent = item.label;
+      button.appendChild(label);
+    }
+
+    if (item.icon && item.icon.path) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('viewBox', (item.icon && item.icon.viewBox) || '0 0 24 24');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', item.icon.path);
+      svg.appendChild(path);
+      button.appendChild(svg);
+    }
+
+    container.appendChild(button);
+  });
 }
 
 function attachGlobalListeners() {

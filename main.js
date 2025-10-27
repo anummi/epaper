@@ -15,6 +15,7 @@ const state = {
   currentSlide: 0,
   activePageIndex: 0,
   orientation: null,
+  isCompact: false,
   viewBox: null,
   zoom: {
     scale: 1,
@@ -43,6 +44,7 @@ async function init() {
   }
 
   buildNavigation();
+  document.body.classList.add('menu-collapsed');
 
   try {
     const issue = await loadLatestIssuePages(state.config);
@@ -81,11 +83,8 @@ function buildNavigation() {
     if (item.action) {
       button.dataset.action = item.action;
     }
-
     if (item.label) {
-      const label = document.createElement('span');
-      label.textContent = item.label;
-      button.appendChild(label);
+      button.title = item.label;
     }
 
     if (item.icon && item.icon.path) {
@@ -96,6 +95,12 @@ function buildNavigation() {
       path.setAttribute('d', item.icon.path);
       svg.appendChild(path);
       button.appendChild(svg);
+    }
+
+    if (item.label) {
+      const label = document.createElement('span');
+      label.textContent = item.label;
+      button.appendChild(label);
     }
 
     container.appendChild(button);
@@ -163,7 +168,8 @@ function handleResize() {
   clearTimeout(state.resizeTimer);
   state.resizeTimer = setTimeout(() => {
     const newOrientation = window.innerWidth > window.innerHeight ? 'landscape' : 'portrait';
-    if (newOrientation !== state.orientation) {
+    const isCompact = window.innerWidth < 900;
+    if (newOrientation !== state.orientation || isCompact !== state.isCompact) {
       renderSlides();
       return;
     }
@@ -218,9 +224,11 @@ function renderSlides() {
   }
 
   const orientation = window.innerWidth > window.innerHeight ? 'landscape' : 'portrait';
+  const isCompact = window.innerWidth < 900;
   state.orientation = orientation;
+  state.isCompact = isCompact;
 
-  const definitions = buildSlideDefinitions(orientation);
+  const definitions = buildSlideDefinitions({ orientation, isCompact });
   state.slideDefinitions = definitions;
 
   const pageTrack = document.querySelector('.page-track');
@@ -242,21 +250,37 @@ function renderSlides() {
   highlightAllPages();
 }
 
-function buildSlideDefinitions(orientation) {
-  if (orientation === 'portrait') {
+function buildSlideDefinitions({ orientation, isCompact }) {
+  if (isCompact || orientation === 'portrait') {
     return state.imagePaths.map((_, index) => [index]);
   }
+  return buildSpreadDefinitions();
+}
 
-  const slides = [];
-  for (let index = 0; index < state.imagePaths.length; index += 1) {
-    if (index === 0 || index === state.imagePaths.length - 1) {
-      slides.push([index]);
-    } else {
-      slides.push([index, index + 1]);
-      index += 1;
-    }
+function buildSpreadDefinitions() {
+  const total = state.imagePaths.length;
+  if (total === 0) {
+    return [];
   }
-  return slides;
+
+  const spreads = [[0]];
+  const lastIndex = total - 1;
+  let index = 1;
+
+  while (index < lastIndex) {
+    if (index + 1 >= lastIndex) {
+      spreads.push([index]);
+      break;
+    }
+    spreads.push([index, index + 1]);
+    index += 2;
+  }
+
+  if (total > 1) {
+    spreads.push([lastIndex]);
+  }
+
+  return spreads;
 }
 
 function createSlide(pages) {
@@ -404,9 +428,12 @@ function highlightAllPages() {
   }
   const buttons = document.querySelectorAll('.all-pages__page');
   buttons.forEach(button => {
-    const pageIndex = Number(button.dataset.pageIndex);
-    const isActive = state.slideDefinitions[state.currentSlide]?.includes(pageIndex);
-    button.classList.toggle('is-active', Boolean(isActive));
+    const pages = button.dataset.pages
+      ? button.dataset.pages.split(',').map(value => Number(value.trim()))
+      : [];
+    const activePages = state.slideDefinitions[state.currentSlide] || [];
+    const isActive = pages.some(page => activePages.includes(page));
+    button.classList.toggle('is-active', isActive);
   });
 }
 
@@ -619,26 +646,42 @@ function buildAllPagesGrid() {
     return;
   }
   grid.innerHTML = '';
-  state.imagePaths.forEach((src, index) => {
+  const spreads = buildSpreadDefinitions();
+  spreads.forEach(pages => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'all-pages__page';
-    button.dataset.pageIndex = String(index);
+    button.dataset.pages = pages.join(',');
+    if (pages.length > 1) {
+      button.classList.add('all-pages__page--spread');
+    }
 
-    const img = document.createElement('img');
-    img.src = src;
-    img.alt = `Sivu ${index + 1}`;
-    button.appendChild(img);
+    const preview = document.createElement('div');
+    preview.className = 'all-pages__preview';
+    pages.forEach(pageIndex => {
+      const img = document.createElement('img');
+      img.src = state.imagePaths[pageIndex];
+      img.alt = `Sivu ${pageIndex + 1}`;
+      preview.appendChild(img);
+    });
+    button.appendChild(preview);
 
     const label = document.createElement('span');
-    label.textContent = String(index + 1);
+    label.textContent = pages.length > 1
+      ? `${pages[0] + 1}–${pages[pages.length - 1] + 1}`
+      : String(pages[0] + 1);
     button.appendChild(label);
 
     button.addEventListener('click', () => {
-      const slideIndex = state.slideDefinitions.findIndex(def => def.includes(index));
+      const slideIndex = state.slideDefinitions.findIndex(def => pages.some(page => def.includes(page)));
       toggleAllPages(false);
       if (slideIndex !== -1) {
         updateActiveSlide(slideIndex);
+        return;
+      }
+      const fallbackIndex = state.slideDefinitions.findIndex(def => def.includes(pages[0]));
+      if (fallbackIndex !== -1) {
+        updateActiveSlide(fallbackIndex);
       }
     });
 

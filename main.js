@@ -34,6 +34,15 @@ const panState = {
   baseY: 0
 };
 
+const swipeState = {
+  pointerId: null,
+  startX: 0,
+  startY: 0,
+  startTime: 0,
+  isTracking: false,
+  isSwipe: false
+};
+
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -43,8 +52,8 @@ async function init() {
     return;
   }
 
-  buildNavigation();
   document.body.classList.add('menu-collapsed');
+  buildNavigation();
 
   try {
     const issue = await loadLatestIssuePages(state.config);
@@ -59,6 +68,8 @@ async function init() {
     updateNavButtons();
   } catch (error) {
     console.error('Näköislehden lataaminen epäonnistui:', error);
+  } finally {
+    requestAnimationFrame(() => document.body.classList.add('menu-animated'));
   }
 }
 
@@ -318,6 +329,7 @@ function createSlide(pages) {
   surface.addEventListener('pointermove', movePan);
   surface.addEventListener('pointerup', endPan);
   surface.addEventListener('pointercancel', endPan);
+  surface.addEventListener('click', suppressSwipeClicks, true);
 
   slide.appendChild(surface);
   return { element: slide, surface, pages };
@@ -586,8 +598,17 @@ function handleDoubleClick(event) {
 
 function startPan(event) {
   if (state.zoom.scale === 1) {
+    swipeState.pointerId = event.pointerId;
+    swipeState.startX = event.clientX;
+    swipeState.startY = event.clientY;
+    swipeState.startTime = event.timeStamp || performance.now();
+    swipeState.isTracking = true;
+    swipeState.isSwipe = false;
     return;
   }
+  swipeState.isTracking = false;
+  swipeState.pointerId = null;
+  swipeState.isSwipe = false;
   event.preventDefault();
   const surface = event.currentTarget;
   surface.setPointerCapture(event.pointerId);
@@ -600,6 +621,14 @@ function startPan(event) {
 }
 
 function movePan(event) {
+  if (swipeState.isTracking && event.pointerId === swipeState.pointerId) {
+    const dx = event.clientX - swipeState.startX;
+    const dy = event.clientY - swipeState.startY;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+      event.preventDefault();
+    }
+    return;
+  }
   if (!panState.active || event.pointerId !== panState.pointerId) {
     return;
   }
@@ -614,6 +643,27 @@ function movePan(event) {
 }
 
 function endPan(event) {
+  if (swipeState.isTracking && event.pointerId === swipeState.pointerId) {
+    const isCancel = event.type === 'pointercancel';
+    if (!isCancel) {
+      const dx = event.clientX - swipeState.startX;
+      const dy = event.clientY - swipeState.startY;
+      const elapsed = (event.timeStamp || performance.now()) - swipeState.startTime;
+      const horizontalDominant = Math.abs(dx) > Math.abs(dy);
+      if (horizontalDominant && Math.abs(dx) > 60 && elapsed < 600) {
+        const direction = dx < 0 ? 1 : -1;
+        gotoSlide(state.currentSlide + direction);
+        swipeState.isSwipe = true;
+      } else {
+        swipeState.isSwipe = false;
+      }
+    } else {
+      swipeState.isSwipe = false;
+    }
+    swipeState.isTracking = false;
+    swipeState.pointerId = null;
+    return;
+  }
   if (!panState.active || event.pointerId !== panState.pointerId) {
     return;
   }
@@ -621,6 +671,15 @@ function endPan(event) {
   surface.releasePointerCapture(event.pointerId);
   panState.active = false;
   panState.pointerId = null;
+}
+
+function suppressSwipeClicks(event) {
+  if (!swipeState.isSwipe) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  swipeState.isSwipe = false;
 }
 
 function toggleAllPages(forceOpen) {

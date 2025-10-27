@@ -3,6 +3,7 @@
 const maxScale = 4;
 const minScale = 1;
 const scaleStep = 0.5;
+const articleBaseUrl = 'https://sandbox-devtest2.anygraaf.net/';
 
 const state = {
   config: null,
@@ -10,6 +11,8 @@ const state = {
   pageMaps: [],
   pageArticles: [],
   articleLookup: new Map(),
+  archiveItems: [],
+  currentIssuePath: null,
   slideDefinitions: [],
   slides: [],
   currentSlide: 0,
@@ -22,7 +25,8 @@ const state = {
     translateX: 0,
     translateY: 0
   },
-  resizeTimer: null
+  resizeTimer: null,
+  listenersAttached: false
 };
 
 const panState = {
@@ -54,23 +58,44 @@ async function init() {
 
   document.body.classList.add('menu-collapsed');
   buildNavigation();
+  attachGlobalListeners();
+  updateFullscreenUI();
 
   try {
-    const issue = await loadLatestIssuePages(state.config);
-    state.imagePaths = issue.imagePaths;
-    state.pageMaps = issue.pageMaps;
-    state.pageArticles = issue.pageArticles;
-    state.articleLookup = new Map(issue.pageArticles.map(article => [String(article.id), article]));
-    state.viewBox = computeViewBox(issue.res);
-    buildAllPagesGrid();
-    renderSlides();
-    attachGlobalListeners();
-    updateNavButtons();
+    const issue = await loadIssueData(state.config);
+    applyIssue(issue);
   } catch (error) {
     console.error('Näköislehden lataaminen epäonnistui:', error);
   } finally {
     requestAnimationFrame(() => document.body.classList.add('menu-animated'));
   }
+}
+
+function applyIssue(issue) {
+  if (!issue) {
+    return;
+  }
+
+  state.imagePaths = Array.isArray(issue.imagePaths) ? issue.imagePaths : [];
+  state.pageMaps = Array.isArray(issue.pageMaps) ? issue.pageMaps : [];
+  state.pageArticles = Array.isArray(issue.pageArticles) ? issue.pageArticles : [];
+  state.articleLookup = new Map(state.pageArticles.map(article => [String(article.id), article]));
+  state.viewBox = computeViewBox(issue.res);
+  if (Array.isArray(issue.archiveItems) && issue.archiveItems.length) {
+    state.archiveItems = issue.archiveItems;
+  }
+  if (issue.path) {
+    state.currentIssuePath = issue.path;
+  }
+
+  toggleAllPages(false);
+  closeArchivePanel();
+  closeReadingWindow();
+  buildAllPagesGrid();
+  renderSlides();
+  updateNavButtons();
+  buildArchiveList();
+  updateAllPagesSizing();
 }
 
 function buildNavigation() {
@@ -119,6 +144,11 @@ function buildNavigation() {
 }
 
 function attachGlobalListeners() {
+  if (state.listenersAttached) {
+    return;
+  }
+  state.listenersAttached = true;
+
   const prevButton = document.querySelector('.nav-prev');
   const nextButton = document.querySelector('.nav-next');
   prevButton?.addEventListener('click', () => gotoSlide(state.currentSlide - 1));
@@ -128,8 +158,23 @@ function attachGlobalListeners() {
   document.querySelector('.zoom-out')?.addEventListener('click', () => adjustZoom(-1));
   document.querySelector('.zoom-reset')?.addEventListener('click', resetZoom);
 
-  document.querySelector('[data-action="toggle-menu"]')?.addEventListener('click', () => {
-    document.body.classList.toggle('menu-collapsed');
+  document.querySelector('[data-action="toggle-menu"]')?.addEventListener('click', toggleMenuCollapsed);
+
+  const fullscreenButton = document.querySelector('[data-action="fullscreen"]');
+  const exitFullscreenButton = document.querySelector('[data-action="exit-fullscreen"]');
+  fullscreenButton?.addEventListener('click', enterFullscreen);
+  exitFullscreenButton?.addEventListener('click', exitFullscreenMode);
+  document.addEventListener('fullscreenchange', updateFullscreenUI);
+
+  const archiveButton = document.querySelector('[data-action="archive"]');
+  const archivePanel = document.querySelector('.archive-panel');
+  const archiveClose = document.querySelector('.archive-panel__close');
+  archiveButton?.addEventListener('click', openArchivePanel);
+  archiveClose?.addEventListener('click', closeArchivePanel);
+  archivePanel?.addEventListener('click', event => {
+    if (event.target === archivePanel) {
+      closeArchivePanel();
+    }
   });
 
   const allPagesItem = document.querySelector('[data-action="toggle-all-pages"]');
@@ -156,6 +201,10 @@ function attachGlobalListeners() {
         toggleAllPages(false);
         return;
       }
+      if (document.querySelector('.archive-panel')?.classList.contains('is-open')) {
+        closeArchivePanel();
+        return;
+      }
       if (document.querySelector('.reading-window')?.classList.contains('is-open')) {
         closeReadingWindow();
       }
@@ -175,6 +224,65 @@ function attachGlobalListeners() {
   window.addEventListener('resize', handleResize);
 }
 
+function toggleMenuCollapsed() {
+  document.body.classList.toggle('menu-collapsed');
+}
+
+function enterFullscreen() {
+  const shell = document.querySelector('.app-shell');
+  if (!shell || document.fullscreenElement || !shell.requestFullscreen) {
+    return;
+  }
+  shell.requestFullscreen().catch(error => {
+    console.error('Kokonäyttötilan avaaminen epäonnistui:', error);
+  });
+}
+
+function exitFullscreenMode() {
+  if (!document.fullscreenElement || !document.exitFullscreen) {
+    return;
+  }
+  document.exitFullscreen().catch(error => {
+    console.error('Kokonäyttötilan sulkeminen epäonnistui:', error);
+  });
+}
+
+function updateFullscreenUI() {
+  const fullscreenButton = document.querySelector('[data-action="fullscreen"]');
+  const exitFullscreenButton = document.querySelector('[data-action="exit-fullscreen"]');
+  const isFullscreen = Boolean(document.fullscreenElement);
+  document.body.classList.toggle('is-fullscreen', isFullscreen);
+  if (fullscreenButton) {
+    fullscreenButton.hidden = isFullscreen;
+    fullscreenButton.setAttribute('aria-hidden', isFullscreen ? 'true' : 'false');
+  }
+  if (exitFullscreenButton) {
+    exitFullscreenButton.hidden = !isFullscreen;
+    exitFullscreenButton.setAttribute('aria-hidden', !isFullscreen ? 'true' : 'false');
+  }
+}
+
+function openArchivePanel() {
+  const panel = document.querySelector('.archive-panel');
+  if (!panel) {
+    return;
+  }
+  toggleAllPages(false);
+  closeReadingWindow();
+  buildArchiveList();
+  panel.classList.add('is-open');
+  panel.setAttribute('aria-hidden', 'false');
+}
+
+function closeArchivePanel() {
+  const panel = document.querySelector('.archive-panel');
+  if (!panel) {
+    return;
+  }
+  panel.classList.remove('is-open');
+  panel.setAttribute('aria-hidden', 'true');
+}
+
 function handleResize() {
   clearTimeout(state.resizeTimer);
   state.resizeTimer = setTimeout(() => {
@@ -182,6 +290,7 @@ function handleResize() {
     const isCompact = window.innerWidth < 900;
     if (newOrientation !== state.orientation || isCompact !== state.isCompact) {
       renderSlides();
+      updateAllPagesSizing();
       return;
     }
     const surface = getActiveSurface();
@@ -192,23 +301,38 @@ function handleResize() {
       state.zoom.translateY = constrained.y;
       applyZoom(surface);
     }
+    updateAllPagesSizing();
   }, 180);
 }
 
-async function loadLatestIssuePages(config) {
+async function loadIssueData(config, issuePath) {
   const rootPath = `static/${config.id}`;
-  const archiveUrl = `${rootPath}/${config.paper}_arch.htm`;
-  const archiveResponse = await fetch(archiveUrl);
-  if (!archiveResponse.ok) {
-    throw new Error(`Arkistotiedoston lataus epäonnistui: ${archiveResponse.status}`);
-  }
-  const archiveData = await archiveResponse.json();
-  if (!Array.isArray(archiveData) || archiveData.length === 0) {
-    throw new Error('Arkistodata on tyhjä.');
+  let archiveData = Array.isArray(state.archiveItems) && state.archiveItems.length
+    ? state.archiveItems
+    : null;
+
+  if (!archiveData) {
+    const archiveUrl = `${rootPath}/${config.paper}_arch.htm`;
+    const archiveResponse = await fetch(archiveUrl);
+    if (!archiveResponse.ok) {
+      throw new Error(`Arkistotiedoston lataus epäonnistui: ${archiveResponse.status}`);
+    }
+    const parsed = await archiveResponse.json();
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error('Arkistodata on tyhjä.');
+    }
+    archiveData = parsed;
   }
 
-  const latestPath = archiveData[0].p;
-  const issueUrl = `${rootPath}/${latestPath}${config.paper}_cont.htm`;
+  const selectedEntry = issuePath
+    ? archiveData.find(entry => entry.p === issuePath)
+    : archiveData[0];
+
+  if (!selectedEntry) {
+    throw new Error('Lehden polkua ei löytynyt arkistosta.');
+  }
+
+  const issueUrl = `${rootPath}/${selectedEntry.p}${config.paper}_cont.htm`;
   const issueResponse = await fetch(issueUrl);
   if (!issueResponse.ok) {
     throw new Error(`Lehden datan lataus epäonnistui: ${issueResponse.status}`);
@@ -218,13 +342,19 @@ async function loadLatestIssuePages(config) {
     throw new Error('Lehden sivumäärää ei löytynyt.');
   }
 
-  const imagePaths = Array.from({ length: issueData.pages }, (_, index) => `${rootPath}/${latestPath}p${index + 1}.webp`);
+  const imagePaths = Array.from(
+    { length: issueData.pages },
+    (_, index) => `${rootPath}/${selectedEntry.p}p${index + 1}.webp`
+  );
 
   return {
     imagePaths,
     pageMaps: issueData.pageMaps || [],
     pageArticles: issueData.pageArticles || [],
-    res: issueData.res
+    res: issueData.res,
+    archiveItems: archiveData,
+    path: selectedEntry.p,
+    label: selectedEntry.d
   };
 }
 
@@ -690,9 +820,11 @@ function toggleAllPages(forceOpen) {
   const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !overlay.classList.contains('is-open');
   if (shouldOpen) {
     resetZoom();
+    closeArchivePanel();
     overlay.classList.add('is-open');
     overlay.setAttribute('aria-hidden', 'false');
     highlightAllPages();
+    updateAllPagesSizing();
   } else {
     overlay.classList.remove('is-open');
     overlay.setAttribute('aria-hidden', 'true');
@@ -711,6 +843,7 @@ function buildAllPagesGrid() {
     button.type = 'button';
     button.className = 'all-pages__page';
     button.dataset.pages = pages.join(',');
+    button.dataset.pageCount = String(pages.length);
     if (pages.length > 1) {
       button.classList.add('all-pages__page--spread');
     }
@@ -748,6 +881,105 @@ function buildAllPagesGrid() {
   });
 }
 
+function buildArchiveList() {
+  const list = document.querySelector('.archive-panel__list');
+  if (!list) {
+    return;
+  }
+  list.innerHTML = '';
+  if (!Array.isArray(state.archiveItems) || state.archiveItems.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'archive-panel__empty';
+    empty.textContent = 'Arkistossa ei ole numeroita.';
+    list.appendChild(empty);
+    return;
+  }
+
+  const currentPath = state.currentIssuePath;
+  state.archiveItems.forEach(entry => {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'archive-panel__item';
+    button.dataset.path = entry.p;
+    if (entry.p === currentPath) {
+      button.classList.add('is-active');
+    }
+
+    const label = document.createElement('span');
+    label.textContent = entry.d || entry.p;
+    button.appendChild(label);
+
+    if (entry.p) {
+      const meta = document.createElement('small');
+      meta.textContent = entry.p.replace(/\/$/, '');
+      button.appendChild(meta);
+    }
+
+    button.addEventListener('click', () => handleArchiveSelection(entry.p));
+    item.appendChild(button);
+    list.appendChild(item);
+  });
+}
+
+function handleArchiveSelection(path) {
+  if (!path) {
+    return;
+  }
+  closeArchivePanel();
+  if (path === state.currentIssuePath) {
+    return;
+  }
+  loadArchiveIssue(path);
+}
+
+async function loadArchiveIssue(path) {
+  try {
+    const issue = await loadIssueData(state.config, path);
+    applyIssue(issue);
+  } catch (error) {
+    console.error('Arkistonumeron lataaminen epäonnistui:', error);
+  }
+}
+
+function updateAllPagesSizing() {
+  const grid = document.querySelector('.all-pages__grid');
+  if (!grid) {
+    return;
+  }
+  const ratio = state.viewBox && state.viewBox.width && state.viewBox.height
+    ? state.viewBox.width / state.viewBox.height
+    : 0.75;
+  const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 0.75;
+  const minHeight = 140;
+  const maxHeight = 260;
+  const targetHeight = Math.max(minHeight, Math.min(maxHeight, window.innerHeight * 0.22));
+  grid.style.setProperty('--preview-height', `${Math.round(targetHeight)}px`);
+
+  const buttons = grid.querySelectorAll('.all-pages__page');
+  buttons.forEach(button => {
+    const pageCount = Number.parseInt(button.dataset.pageCount || '1', 10) || 1;
+    const width = Math.max(targetHeight * safeRatio * pageCount, 120);
+    button.style.setProperty('--preview-width', `${Math.round(width)}px`);
+  });
+}
+
+function resolveArticleUrl(url) {
+  const base = (state.config && state.config.articleBaseUrl) || articleBaseUrl;
+  try {
+    return new URL(url, base).href;
+  } catch (error) {
+    try {
+      const normalizedBase = new URL(base);
+      const cleaned = String(url || '').replace(/^\/+/, '');
+      return `${normalizedBase.origin}/${cleaned}`;
+    } catch (nestedError) {
+      console.warn('Virhe URL-osoitteen muodostamisessa, palautetaan alkuperäinen arvo.', error);
+      return url;
+    }
+  }
+}
+
 async function loadArticleContent(url) {
   const readingWindow = document.querySelector('.reading-window');
   const content = document.querySelector('#article-content');
@@ -761,7 +993,8 @@ async function loadArticleContent(url) {
   content.innerHTML = '<p>Ladataan sisältöä…</p>';
 
   try {
-    const response = await fetch(url);
+    const articleUrl = resolveArticleUrl(url);
+    const response = await fetch(articleUrl);
     if (!response.ok) {
       throw new Error(`Artikkelin lataus epäonnistui: ${response.status}`);
     }
@@ -775,11 +1008,18 @@ async function loadArticleContent(url) {
     const images = content.querySelectorAll('img');
     images.forEach(image => {
       const src = image.getAttribute('src');
-      if (!src || !src.trim()) {
-        const dataSrc = image.getAttribute('data-aghref');
-        if (dataSrc) {
-          image.src = dataSrc;
-        }
+      const dataSrc = image.getAttribute('data-aghref');
+      const resolved = dataSrc || src;
+      if (resolved) {
+        image.src = resolveArticleUrl(resolved);
+      }
+    });
+
+    const links = content.querySelectorAll('a[href]');
+    links.forEach(link => {
+      const href = link.getAttribute('href');
+      if (href) {
+        link.href = resolveArticleUrl(href);
       }
     });
   } catch (error) {

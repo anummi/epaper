@@ -39,33 +39,65 @@ body.is-zoomed {
 
 .app-shell {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto 1fr;
   width: min(1200px, 100%);
   min-height: 100vh;
   background: var(--surface);
   box-shadow: var(--shadow);
+  overflow: hidden;
 }
 
 .menu-bar {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   z-index: 20;
+  min-height: 100%;
+  width: clamp(12rem, 20vw, 14rem);
+  transition: width var(--transition-slow), transform var(--transition-slow), box-shadow var(--transition-slow);
 }
 
 .menu-bar .menu-content {
+  flex: 1 1 auto;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 0.5rem;
-  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) 0.75rem 0;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  overflow-y: auto;
+}
+
+body.menu-collapsed .menu-bar {
+  width: clamp(4rem, 5vw, 4.75rem);
+}
+
+body.menu-collapsed .menu-bar .menu-content {
+  align-items: center;
+  padding-inline: 0.75rem;
+}
+
+body:not(.menu-collapsed) .menu-bar {
+  box-shadow: 18px 0 35px rgba(15, 23, 42, 0.12);
+}
+
+@media (max-width: 768px) {
+  .menu-bar {
+    width: clamp(10rem, 60vw, 12rem);
+  }
 }
 
 .menu-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  width: 100%;
   border-radius: 999px;
   background: transparent;
   color: inherit;
@@ -79,12 +111,34 @@ body.is-zoomed {
 .menu-item span {
   font-size: 0.9rem;
   font-weight: 600;
+  white-space: nowrap;
+  transition: opacity var(--transition), transform var(--transition), max-width var(--transition);
 }
 
 .menu-item svg {
-  width: 1rem;
-  height: 1rem;
+  width: 1.1rem;
+  height: 1.1rem;
   fill: currentColor;
+  flex-shrink: 0;
+}
+
+body.menu-collapsed .menu-item {
+  justify-content: center;
+  gap: 0;
+  padding: 0.75rem;
+}
+
+body.menu-collapsed .menu-item span {
+  opacity: 0;
+  transform: translateX(-0.5rem);
+  max-width: 0;
+  overflow: hidden;
+}
+
+body:not(.menu-collapsed) .menu-item span {
+  opacity: 1;
+  transform: translateX(0);
+  max-width: 100%;
 }
 
 .menu-item:hover,
@@ -95,10 +149,13 @@ body.is-zoomed {
 
 .page-stage {
   position: relative;
-  flex: 1 1 auto;
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  min-height: 100vh;
   padding: clamp(1rem, 3vw, 2rem);
   background: radial-gradient(circle at top, rgba(0, 0, 0, 0.06), transparent 55%);
   overflow: hidden;
@@ -139,6 +196,8 @@ body.is-zoomed {
   transform-origin: center center;
   transition: transform 120ms ease-out;
   touch-action: none;
+  max-height: 85vh;
+  height: min(85vh, 100%);
 }
 
 .page-surface.is-zoomed {
@@ -152,13 +211,15 @@ body.is-zoomed {
 .page-surface img {
   display: block;
   max-width: none;
-  height: auto;
-  width: 100%;
+  height: 100%;
+  width: auto;
 }
 
 .page-image {
   position: relative;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
   overflow: hidden;
 }
 
@@ -333,7 +394,7 @@ body.is-zoomed .maprect {
 .all-pages__grid {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 1rem;
   overflow-y: auto;
   padding-bottom: 1rem;
@@ -351,9 +412,28 @@ body.is-zoomed .maprect {
   transition: transform var(--transition), box-shadow var(--transition);
 }
 
-.all-pages__page img {
+.all-pages__preview {
+  display: flex;
   width: 100%;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: #f8f9fb;
+}
+
+.all-pages__preview img {
+  flex: 1 1 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   display: block;
+}
+
+.all-pages__page--spread .all-pages__preview {
+  aspect-ratio: 6 / 4;
+}
+
+.all-pages__page--spread .all-pages__preview img + img {
+  border-left: 1px solid rgba(15, 23, 42, 0.12);
 }
 
 .all-pages__page span {
@@ -434,15 +514,6 @@ body.is-zoomed .maprect {
 
 .reading-window__content p {
   line-height: 1.6;
-}
-
-body.menu-collapsed .menu-bar .menu-content {
-  max-height: 3.5rem;
-  overflow: hidden;
-}
-
-body.menu-collapsed .menu-bar .menu-item:not(:first-child) {
-  display: none;
 }
 
 body.is-zoomed .menu-bar {

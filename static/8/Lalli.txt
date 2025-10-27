@@ -1,0 +1,3 @@
+net use \\lalli193\neo_shr /delete
+net use \\lalli193\neo_shr Doris2017# /user:lalli1\anygraaf
+explorer \\lalli193\neo_shr

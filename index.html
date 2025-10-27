@@ -7,44 +7,7 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="menu-bar menu-top">
-        <div class="menu-content" data-role="menu"></div>
-      </header>
-      <main class="page-stage">
-        <button class="nav-button nav-prev" type="button" aria-label="Edellinen sivu"></button>
-        <div class="page-track" aria-live="polite"></div>
-        <button class="nav-button nav-next" type="button" aria-label="Seuraava sivu"></button>
-      </main>
-      <div class="zoom-menu" aria-hidden="true">
-        <button class="zoom-button zoom-out" type="button" aria-label="Zoomaa ulos">−</button>
-        <button class="zoom-button zoom-in" type="button" aria-label="Zoomaa sisään">+</button>
-        <button class="zoom-button zoom-reset" type="button" aria-label="Palauta näkymä">Reset</button>
-      </div>
-      <aside class="all-pages" aria-hidden="true">
-        <header class="all-pages__header">
-          <h2>Kaikki sivut</h2>
-          <button class="all-pages__close" type="button" aria-label="Sulje kaikki sivut">×</button>
-        </header>
-        <div class="all-pages__grid"></div>
-      </aside>
-      <aside class="archive-panel" aria-hidden="true">
-        <div class="archive-panel__dialog" role="dialog" aria-modal="true" aria-labelledby="archive-title">
-          <header class="archive-panel__header">
-            <h2 id="archive-title" class="archive-panel__title">Arkisto</h2>
-            <button class="archive-panel__close" type="button" aria-label="Sulje arkisto">×</button>
-          </header>
-          <ul class="archive-panel__list"></ul>
-        </div>
-      </aside>
-      <section class="reading-window" aria-hidden="true">
-        <div class="reading-window__header">
-          <h2>Artikkeli</h2>
-          <button class="close-article" type="button" aria-label="Sulje artikkeli">×</button>
-        </div>
-        <div id="article-content" class="reading-window__content"></div>
-      </section>
-    </div>
+    <div id="app-root"></div>
     <script src="config.js"></script>
     <script src="main.js" type="module"></script>
   </body>

@@ -54,10 +54,11 @@ body.is-zoomed {
 }
 
 .menu-bar .menu-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem clamp(1rem, 2vw, 1.5rem);
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) 0.75rem 0;
 }
 
 .menu-item {
@@ -68,6 +69,8 @@ body.is-zoomed {
   border-radius: 999px;
   background: transparent;
   color: inherit;
+  border: none;
+  font: inherit;
   cursor: pointer;
   text-decoration: none;
   transition: background var(--transition), color var(--transition);

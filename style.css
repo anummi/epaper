@@ -100,7 +100,7 @@ body:not(.menu-collapsed) .menu-bar {
 .menu-item {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   width: 100%;
@@ -112,6 +112,7 @@ body:not(.menu-collapsed) .menu-bar {
   cursor: pointer;
   text-decoration: none;
   transition: background var(--transition), color var(--transition);
+  flex-direction: row-reverse;
 }
 
 .menu-item span {

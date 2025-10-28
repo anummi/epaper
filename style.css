@@ -930,23 +930,24 @@ body.theme-dark .reading-backdrop {
 
 .ads-panel__grid {
   --ads-panel-gutter: clamp(1rem, 2.5vw, 1.5rem);
+  --ads-panel-columns: 3;
   margin: 0;
   padding: 0;
   width: 100%;
   display: grid;
   gap: var(--ads-panel-gutter);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--ads-panel-columns), minmax(0, 1fr));
 }
 
 @media (max-width: 1024px) {
   .ads-panel__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --ads-panel-columns: 2;
   }
 }
 
 @media (max-width: 640px) {
   .ads-panel__grid {
-    grid-template-columns: 1fr;
+    --ads-panel-columns: 1;
   }
 }
 

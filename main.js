@@ -335,6 +335,171 @@ function createAdActionElement({ key, href = null, target = '_self', rel = null,
   return element;
 }
 
+function getAdContactDetails(ad) {
+  if (!ad) {
+    return {
+      address: '',
+      phone: null,
+      website: null,
+      navigationUrl: null
+    };
+  }
+  const addressParts = [ad.st, ad.zi, ad.ci]
+    .map(part => (part ? String(part).trim() : ''))
+    .filter(Boolean);
+  const phone = normalizePhoneNumber(ad.p);
+  const website = resolveAdUrl(ad.s);
+  const navigationQuery = buildAdNavigationQuery(ad);
+  const navigationUrl = navigationQuery
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(navigationQuery)}`
+    : null;
+  return {
+    address: addressParts.join(', '),
+    phone,
+    website,
+    navigationUrl
+  };
+}
+
+function createAdDetailsSection(ad) {
+  const details = getAdContactDetails(ad);
+  const container = document.createElement('div');
+  container.className = 'ad-details';
+
+  if (details.address) {
+    const address = document.createElement('p');
+    address.className = 'ad-details__address';
+    address.textContent = details.address;
+    container.appendChild(address);
+  }
+
+  const links = [];
+  if (details.phone) {
+    const phoneLink = document.createElement('a');
+    phoneLink.className = 'ad-details__link ad-details__link--phone';
+    phoneLink.href = `tel:${details.phone}`;
+    phoneLink.textContent = details.phone;
+    phoneLink.setAttribute('aria-label', `${getAdActionLabel('call', AD_ACTION_FALLBACKS.call)} ${details.phone}`.trim());
+    links.push(phoneLink);
+  }
+  if (details.website) {
+    const websiteLink = document.createElement('a');
+    websiteLink.className = 'ad-details__link ad-details__link--website';
+    websiteLink.href = details.website;
+    websiteLink.target = '_blank';
+    websiteLink.rel = 'noopener noreferrer';
+    websiteLink.textContent = details.website;
+    websiteLink.setAttribute('aria-label', getAdActionLabel('openLink', AD_ACTION_FALLBACKS.openLink));
+    links.push(websiteLink);
+  }
+  if (details.navigationUrl) {
+    const navigateLink = document.createElement('a');
+    navigateLink.className = 'ad-details__link ad-details__link--navigate';
+    navigateLink.href = details.navigationUrl;
+    navigateLink.target = '_blank';
+    navigateLink.rel = 'noopener noreferrer';
+    navigateLink.textContent = getAdActionLabel('navigate', AD_ACTION_FALLBACKS.navigate);
+    navigateLink.setAttribute('aria-label', getAdActionLabel('navigate', AD_ACTION_FALLBACKS.navigate));
+    links.push(navigateLink);
+  }
+
+  if (links.length) {
+    const linkWrapper = document.createElement('div');
+    linkWrapper.className = 'ad-details__links';
+    links.forEach(link => linkWrapper.appendChild(link));
+    container.appendChild(linkWrapper);
+  }
+
+  if (!container.childNodes.length) {
+    return null;
+  }
+
+  return container;
+}
+
+function buildAdActionDescriptors(adId, ad) {
+  const descriptors = [];
+  const details = getAdContactDetails(ad);
+  if (details.website) {
+    descriptors.push({ key: 'openLink', href: details.website, target: '_blank' });
+  }
+  if (details.phone) {
+    descriptors.push({ key: 'call', href: `tel:${details.phone}` });
+  }
+  if (details.navigationUrl) {
+    descriptors.push({ key: 'navigate', href: details.navigationUrl, target: '_blank' });
+  }
+  descriptors.push({
+    key: 'openImage',
+    onClick: event => {
+      if (event) {
+        event.preventDefault();
+      }
+      openAdById(adId);
+    }
+  });
+  return descriptors;
+}
+
+function createAdActionsContainer(adId, ad) {
+  const descriptors = buildAdActionDescriptors(adId, ad);
+  if (!descriptors.length) {
+    return null;
+  }
+  const actions = document.createElement('div');
+  actions.className = 'ad-actions';
+  ['pointerdown', 'pointerup'].forEach(type => {
+    actions.addEventListener(type, event => event.stopPropagation());
+  });
+  actions.addEventListener('click', event => event.stopPropagation());
+  descriptors.forEach(descriptor => {
+    const button = createAdActionElement(descriptor);
+    actions.appendChild(button);
+  });
+  return actions;
+}
+
+function getAdImageSources(adId) {
+  const imageBase = resolveAdImageUrl(adId);
+  if (!imageBase) {
+    return [];
+  }
+  return [`${imageBase}.webp`, `${imageBase}.jpg`, `${imageBase}.png`];
+}
+
+function createAdImageElement(adId, ad, options = {}) {
+  const sources = getAdImageSources(adId);
+  if (!sources.length) {
+    return null;
+  }
+  const image = document.createElement('img');
+  image.alt = ad?.n || getAdWindowTitle();
+  image.src = sources[0];
+  if (options.loading) {
+    image.loading = options.loading;
+  }
+  if (sources.length > 1) {
+    let index = 1;
+    const handleError = () => {
+      if (index >= sources.length) {
+        image.removeEventListener('error', handleError);
+        return;
+      }
+      image.src = sources[index];
+      index += 1;
+    };
+    image.addEventListener('error', handleError);
+  }
+  if (typeof options.onLoad === 'function') {
+    if (image.complete) {
+      options.onLoad(image);
+    } else {
+      image.addEventListener('load', () => options.onLoad(image), { once: true });
+    }
+  }
+  return image;
+}
+
 function loadStoredSettings() {
   try {
     const raw = window.localStorage?.getItem(SETTINGS_STORAGE_KEY);
@@ -516,6 +681,40 @@ function buildLayout() {
   readingWindow.appendChild(readingContent);
   shell.appendChild(readingWindow);
 
+  const adsPanel = document.createElement('aside');
+  adsPanel.className = 'ads-panel';
+  adsPanel.setAttribute('aria-hidden', 'true');
+  const adsDialog = document.createElement('div');
+  adsDialog.className = 'ads-panel__dialog';
+  adsDialog.setAttribute('role', 'dialog');
+  adsDialog.setAttribute('aria-modal', 'true');
+  const adsHeader = document.createElement('header');
+  adsHeader.className = 'ads-panel__header';
+  const adsTitle = document.createElement('h2');
+  adsTitle.id = 'ads-panel-title';
+  adsTitle.className = 'ads-panel__title';
+  adsHeader.appendChild(adsTitle);
+  const adsClose = document.createElement('button');
+  adsClose.type = 'button';
+  adsClose.className = 'ads-panel__close';
+  adsClose.textContent = '×';
+  adsHeader.appendChild(adsClose);
+  const adsContent = document.createElement('div');
+  adsContent.className = 'ads-panel__content';
+  const adsEmpty = document.createElement('p');
+  adsEmpty.className = 'ads-panel__empty';
+  adsEmpty.hidden = true;
+  adsEmpty.setAttribute('aria-hidden', 'true');
+  const adsGrid = document.createElement('div');
+  adsGrid.className = 'ads-panel__grid';
+  adsContent.appendChild(adsEmpty);
+  adsContent.appendChild(adsGrid);
+  adsDialog.appendChild(adsHeader);
+  adsDialog.appendChild(adsContent);
+  adsDialog.setAttribute('aria-labelledby', 'ads-panel-title');
+  adsPanel.appendChild(adsDialog);
+  shell.appendChild(adsPanel);
+
   const settingsPanel = document.createElement('aside');
   settingsPanel.className = 'settings-panel';
   settingsPanel.setAttribute('aria-hidden', 'true');
@@ -597,6 +796,12 @@ function buildLayout() {
     readingTitle,
     readingClose,
     readingContent,
+    adsPanel,
+    adsDialog,
+    adsTitle,
+    adsClose,
+    adsGrid,
+    adsEmpty,
     settingsPanel,
     settingsDialog,
     settingsTitle,
@@ -650,10 +855,24 @@ function refreshLocalizedTexts(options = {}) {
 
   if (dom.readingTitle) {
     dom.readingTitle.textContent = resolveLabel('readingTitle', 'Artikkeli');
+    dom.readingTitle.hidden = false;
+    dom.readingTitle.setAttribute('aria-hidden', 'false');
   }
   dom.readingClose?.setAttribute('aria-label', resolveLabel('closeArticle', 'Sulje artikkeli'));
   updateReadingNavigation();
   updateAdHotspotLabels();
+
+  if (dom.adsTitle) {
+    dom.adsTitle.textContent = getNavigationLabelByAction('ads') || resolveLabel('adsTitle', 'Mainokset');
+  }
+  if (dom.adsClose) {
+    const closeLabel = resolveLabel('closeAds', 'Sulje mainokset');
+    dom.adsClose.setAttribute('aria-label', closeLabel);
+    dom.adsClose.title = closeLabel;
+  }
+  if (dom.adsEmpty) {
+    dom.adsEmpty.textContent = resolveLabel('adsEmpty', 'Lehdessä ei ole mainoksia.');
+  }
 
   if (dom.settingsTitle) {
     dom.settingsTitle.textContent = resolveLabel('settingsTitle', 'Asetukset');
@@ -683,6 +902,10 @@ function refreshLocalizedTexts(options = {}) {
     buildArchiveList();
   }
   updateAllPagesSizing();
+  buildAdsPanelContent();
+  if (state.currentAdId) {
+    openAdById(state.currentAdId);
+  }
 }
 
 function applySettings(options = {}) {
@@ -724,13 +947,24 @@ function normalizeArchivePath(path) {
   return path.endsWith('/') ? path : `${path}/`;
 }
 
+function sanitizeIssueParam(value) {
+  if (!value) {
+    return '';
+  }
+  return String(value).replace(/\//g, '').trim();
+}
+
 function updateLocation() {
   if (!state.currentIssuePath) {
     return;
   }
   const params = new URLSearchParams(window.location.search);
-  const shareableIssue = state.currentIssuePath.replace(/\/$/, '');
-  params.set('issue', shareableIssue);
+  const shareableIssue = sanitizeIssueParam(state.currentIssuePath);
+  if (shareableIssue) {
+    params.set('issue', shareableIssue);
+  } else {
+    params.delete('issue');
+  }
   params.set('page', String((state.activePageIndex || 0) + 1));
   const newUrl = `${window.location.pathname}?${params.toString()}`;
   window.history.replaceState({ issue: state.currentIssuePath, page: state.activePageIndex }, '', newUrl);
@@ -805,6 +1039,7 @@ function applyIssue(issue, options = {}) {
       }
     });
   });
+  buildAdsPanelContent();
   state.viewBox = computeViewBox(issue.res);
   if (Array.isArray(issue.archiveItems) && issue.archiveItems.length) {
     state.archiveItems = issue.archiveItems;
@@ -934,6 +1169,9 @@ function handleNavigationAction(action) {
     case 'toggle-all-pages':
       toggleAllPages(true);
       break;
+    case 'ads':
+      openAdsPanel();
+      break;
     case 'archive':
       openArchivePanel();
       break;
@@ -983,6 +1221,8 @@ function attachGlobalListeners() {
     readingNext,
     readingClose,
     readingBackdrop,
+    adsPanel,
+    adsClose,
     settingsPanel,
     settingsClose,
     languageSelect,
@@ -1020,6 +1260,13 @@ function attachGlobalListeners() {
   readingNext?.addEventListener('click', () => gotoAdjacentArticle(1));
   readingClose?.addEventListener('click', closeReadingWindow);
   readingBackdrop?.addEventListener('click', closeReadingWindow);
+
+  adsClose?.addEventListener('click', closeAdsPanel);
+  adsPanel?.addEventListener('click', event => {
+    if (event.target === adsPanel) {
+      closeAdsPanel();
+    }
+  });
 
   settingsClose?.addEventListener('click', closeSettingsPanel);
   settingsPanel?.addEventListener('click', event => {
@@ -1087,6 +1334,10 @@ function handleKeydown(event) {
     }
     if (state.dom.readingWindow?.classList.contains('is-open')) {
       closeReadingWindow();
+      return;
+    }
+    if (isAdsPanelOpen()) {
+      closeAdsPanel();
       return;
     }
   }
@@ -1298,6 +1549,8 @@ function openArticleById(articleId) {
   const heading = state.dom.readingTitle;
   if (heading) {
     heading.textContent = article.hl || resolveLabel('readingTitle', 'Artikkeli');
+    heading.hidden = false;
+    heading.setAttribute('aria-hidden', 'false');
   }
   state.currentArticleId = id;
   updateReadingNavigation();
@@ -1314,6 +1567,7 @@ function openArchivePanel() {
   toggleAllPages(false);
   closeSettingsPanel();
   closeReadingWindow();
+  closeAdsPanel();
   buildArchiveList();
   panel.classList.add('is-open');
   panel.setAttribute('aria-hidden', 'false');
@@ -1328,6 +1582,40 @@ function closeArchivePanel() {
   panel.setAttribute('aria-hidden', 'true');
 }
 
+function openAdsPanel() {
+  const { adsPanel, adsClose } = state.dom;
+  if (!adsPanel) {
+    return;
+  }
+  toggleAllPages(false);
+  closeArchivePanel();
+  closeSettingsPanel();
+  closeReadingWindow();
+  buildAdsPanelContent();
+  adsPanel.classList.add('is-open');
+  adsPanel.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('ads-open');
+  requestAnimationFrame(() => {
+    sizeAdsPanelItems();
+    adsClose?.focus({ preventScroll: true });
+  });
+}
+
+function closeAdsPanel() {
+  const panel = state.dom.adsPanel;
+  if (!panel) {
+    return;
+  }
+  panel.classList.remove('is-open');
+  panel.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('ads-open');
+}
+
+function isAdsPanelOpen() {
+  const panel = state.dom.adsPanel;
+  return Boolean(panel && panel.classList.contains('is-open'));
+}
+
 function openSettingsPanel() {
   const panel = state.dom.settingsPanel;
   if (!panel) {
@@ -1336,6 +1624,7 @@ function openSettingsPanel() {
   toggleAllPages(false);
   closeArchivePanel();
   closeReadingWindow();
+  closeAdsPanel();
   panel.classList.add('is-open');
   panel.setAttribute('aria-hidden', 'false');
   state.dom.languageSelect?.focus({ preventScroll: true });
@@ -1369,7 +1658,181 @@ function handleResize() {
       applyZoom(surface);
     }
     updateAllPagesSizing();
+    sizeAdsPanelItems();
   }, 180);
+}
+
+function collectAdsInOrder() {
+  const ads = [];
+  const seen = new Set();
+  if (!Array.isArray(state.pageAds)) {
+    return ads;
+  }
+  state.pageAds.forEach((adsOnPage, pageIndex) => {
+    if (!Array.isArray(adsOnPage)) {
+      return;
+    }
+    adsOnPage.forEach((ad, index) => {
+      if (!ad || ad.i == null) {
+        return;
+      }
+      const id = String(ad.i);
+      if (seen.has(id)) {
+        return;
+      }
+      const adData = state.adLookup.get(id) || ad;
+      seen.add(id);
+      ads.push({ id, ad: adData, pageIndex, order: index });
+    });
+  });
+  ads.sort((a, b) => {
+    if (a.pageIndex !== b.pageIndex) {
+      return a.pageIndex - b.pageIndex;
+    }
+    if (a.order !== b.order) {
+      return a.order - b.order;
+    }
+    return a.id.localeCompare(b.id);
+  });
+  return ads;
+}
+
+function buildAdsPanelContent() {
+  const grid = state.dom.adsGrid;
+  const emptyMessage = state.dom.adsEmpty;
+  if (!grid) {
+    return;
+  }
+  grid.innerHTML = '';
+  const ads = collectAdsInOrder();
+  if (!ads.length) {
+    if (emptyMessage) {
+      emptyMessage.hidden = false;
+      emptyMessage.setAttribute('aria-hidden', 'false');
+    }
+    return;
+  }
+  if (emptyMessage) {
+    emptyMessage.hidden = true;
+    emptyMessage.setAttribute('aria-hidden', 'true');
+  }
+  const fragment = document.createDocumentFragment();
+  ads.forEach(item => {
+    const card = createAdsPanelCard(item);
+    if (card) {
+      fragment.appendChild(card);
+    }
+  });
+  grid.appendChild(fragment);
+  requestAnimationFrame(() => sizeAdsPanelItems());
+}
+
+function createAdsPanelCard({ id, ad, pageIndex }) {
+  if (!id || !ad) {
+    return null;
+  }
+  const card = document.createElement('article');
+  card.className = 'ads-card';
+  card.dataset.adId = id;
+  card.dataset.pageIndex = String(pageIndex);
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
+  const label = ad?.n ? String(ad.n) : getAdWindowTitle();
+  card.setAttribute('aria-label', label);
+
+  const header = document.createElement('header');
+  header.className = 'ads-card__header';
+  if (ad?.n) {
+    const title = document.createElement('h3');
+    title.className = 'ads-card__title';
+    title.textContent = ad.n;
+    header.appendChild(title);
+  } else {
+    header.classList.add('ads-card__header--fallback');
+    const title = document.createElement('h3');
+    title.className = 'ads-card__title';
+    title.textContent = label;
+    header.appendChild(title);
+  }
+  card.appendChild(header);
+
+  const detailsSection = createAdDetailsSection(ad);
+  if (detailsSection) {
+    card.appendChild(detailsSection);
+  }
+
+  const mediaFigure = document.createElement('figure');
+  mediaFigure.className = 'ads-card__media';
+  const image = createAdImageElement(id, ad, {
+    loading: 'lazy',
+    onLoad: () => sizeAdsPanelItems()
+  });
+  if (image) {
+    mediaFigure.appendChild(image);
+    card.appendChild(mediaFigure);
+  } else {
+    mediaFigure.remove();
+    const fallback = document.createElement('p');
+    fallback.className = 'ads-card__fallback';
+    fallback.textContent = getAdActionLabel('imageUnavailable', AD_ACTION_FALLBACKS.imageUnavailable);
+    card.appendChild(fallback);
+  }
+
+  const actions = createAdActionsContainer(id, ad);
+  if (actions) {
+    card.appendChild(actions);
+  }
+
+  card.addEventListener('pointerenter', () => card.classList.add('is-active'));
+  card.addEventListener('pointerleave', () => card.classList.remove('is-active'));
+  card.addEventListener('focusin', () => card.classList.add('is-active'));
+  card.addEventListener('focusout', event => {
+    if (!card.contains(event.relatedTarget)) {
+      card.classList.remove('is-active');
+    }
+  });
+
+  card.addEventListener('click', event => {
+    if (event.target.closest('.ad-actions') || event.target.closest('.ad-details__link')) {
+      return;
+    }
+    openAdById(id);
+  });
+  card.addEventListener('keydown', event => {
+    if (event.target !== card) {
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openAdById(id);
+    }
+  });
+
+  return card;
+}
+
+function sizeAdsPanelItems() {
+  const grid = state.dom.adsGrid;
+  if (!grid) {
+    return;
+  }
+  const cards = grid.querySelectorAll('.ads-card');
+  if (!cards.length) {
+    return;
+  }
+  const styles = getComputedStyle(grid);
+  const rowHeight = Number.parseFloat(styles.getPropertyValue('--ads-grid-row-height')) || 12;
+  const gapValue = styles.rowGap || styles.gridRowGap || '0';
+  const rowGap = Number.parseFloat(gapValue) || 0;
+  cards.forEach(card => {
+    card.style.removeProperty('grid-row-end');
+    const rect = card.getBoundingClientRect();
+    if (!rect.height) {
+      return;
+    }
+    const span = Math.max(1, Math.ceil((rect.height + rowGap) / (rowHeight + rowGap)));
+    card.style.gridRowEnd = `span ${span}`;
+  });
 }
 
 async function loadIssueData(config, issuePath) {
@@ -1377,8 +1840,12 @@ async function loadIssueData(config, issuePath) {
   let archiveData = Array.isArray(state.archiveItems) && state.archiveItems.length
     ? state.archiveItems
     : null;
-  const normalizedTargetPath = issuePath ? normalizeArchivePath(issuePath) : null;
-  
+  const rawIssueParam = issuePath ? String(issuePath).trim() : '';
+  const normalizedTargetPath = rawIssueParam && rawIssueParam.includes('/')
+    ? normalizeArchivePath(rawIssueParam)
+    : null;
+  const sanitizedTargetParam = sanitizeIssueParam(rawIssueParam);
+
   if (!archiveData) {
     const archiveUrl = `${rootPath}/${config.paper}_arch.htm`;
     const archiveResponse = await fetch(archiveUrl);
@@ -1394,9 +1861,20 @@ async function loadIssueData(config, issuePath) {
 
   state.archiveLoaded = true;
 
-  const selectedEntry = normalizedTargetPath
-    ? archiveData.find(entry => normalizeArchivePath(entry.p) === normalizedTargetPath)
-    : archiveData[0];
+  let selectedEntry = null;
+  if (rawIssueParam) {
+    selectedEntry = archiveData.find(entry => {
+      const normalizedEntry = normalizeArchivePath(entry.p);
+      if (normalizedTargetPath && normalizedEntry === normalizedTargetPath) {
+        return true;
+      }
+      const sanitizedEntry = sanitizeIssueParam(normalizedEntry);
+      return sanitizedEntry && sanitizedTargetParam && sanitizedEntry === sanitizedTargetParam;
+    }) || null;
+  }
+  if (!selectedEntry) {
+    selectedEntry = archiveData[0];
+  }
 
   if (!selectedEntry) {
     throw new Error('Lehden polkua ei löytynyt arkistosta.');
@@ -1661,74 +2139,25 @@ function createAdHotspot(pageIndex, mapItem, ad) {
   hotspot.setAttribute('tabindex', '0');
   hotspot.setAttribute('aria-label', accessibleLabel);
 
-  const actions = document.createElement('div');
-  actions.className = 'ad-hotspot__actions';
-  ['pointerdown', 'pointerup'].forEach(type => {
-    actions.addEventListener(type, event => event.stopPropagation());
+  const actions = createAdActionsContainer(adId, ad);
+  if (actions) {
+    hotspot.appendChild(actions);
+  }
+
+  hotspot.addEventListener('pointerenter', () => hotspot.classList.add('is-active'));
+  hotspot.addEventListener('pointerleave', () => hotspot.classList.remove('is-active'));
+  hotspot.addEventListener('focusin', () => hotspot.classList.add('is-active'));
+  hotspot.addEventListener('focusout', event => {
+    if (!hotspot.contains(event.relatedTarget)) {
+      hotspot.classList.remove('is-active');
+    }
   });
-  actions.addEventListener('click', event => event.stopPropagation());
-
-  const buttons = [];
-
-  const website = resolveAdUrl(ad.s);
-  if (website) {
-    const websiteButton = createAdActionElement({
-      key: 'openLink',
-      href: website,
-      target: '_blank'
-    });
-    websiteButton.addEventListener('click', () => deactivateAdHotspot(hotspot));
-    buttons.push(websiteButton);
-  }
-
-  const phone = normalizePhoneNumber(ad.p);
-  if (phone) {
-    const callButton = createAdActionElement({
-      key: 'call',
-      href: `tel:${phone}`
-    });
-    callButton.addEventListener('click', () => deactivateAdHotspot(hotspot));
-    buttons.push(callButton);
-  }
-
-  const navigationQuery = buildAdNavigationQuery(ad);
-  if (navigationQuery) {
-    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(navigationQuery)}`;
-    const navigateButton = createAdActionElement({
-      key: 'navigate',
-      href: mapsUrl,
-      target: '_blank'
-    });
-    navigateButton.addEventListener('click', () => deactivateAdHotspot(hotspot));
-    buttons.push(navigateButton);
-  }
-
-  const openButton = createAdActionElement({ key: 'openImage' });
-  openButton.addEventListener('click', event => {
-    event.preventDefault();
-    openAdById(adId);
-    deactivateAdHotspot(hotspot);
-  });
-  buttons.push(openButton);
-
-  if (!buttons.length) {
-    return null;
-  }
-
-  buttons.forEach(button => actions.appendChild(button));
-  hotspot.appendChild(actions);
-
-  hotspot.addEventListener('pointerenter', () => activateAdHotspot(hotspot));
   hotspot.addEventListener('click', event => {
-    if (event.target.closest('.ad-hotspot__actions')) {
+    if (event.target.closest('.ad-actions')) {
       return;
     }
     event.preventDefault();
-    if (hotspot.classList.contains('is-active')) {
-      deactivateAdHotspot(hotspot);
-    } else {
-      activateAdHotspot(hotspot);
-    }
+    openAdById(adId);
   });
   hotspot.addEventListener('keydown', event => {
     if (event.target !== hotspot) {
@@ -1736,34 +2165,11 @@ function createAdHotspot(pageIndex, mapItem, ad) {
     }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      if (hotspot.classList.contains('is-active')) {
-        deactivateAdHotspot(hotspot);
-      } else {
-        activateAdHotspot(hotspot);
-      }
+      openAdById(adId);
     }
   });
 
   return hotspot;
-}
-
-function activateAdHotspot(hotspot) {
-  if (!hotspot) {
-    return;
-  }
-  document.querySelectorAll('.ad-hotspot.is-active').forEach(element => {
-    if (element !== hotspot) {
-      element.classList.remove('is-active');
-    }
-  });
-  hotspot.classList.add('is-active');
-}
-
-function deactivateAdHotspot(hotspot) {
-  if (!hotspot) {
-    return;
-  }
-  hotspot.classList.remove('is-active');
 }
 
 function deactivateAllAdHotspots() {
@@ -1792,6 +2198,32 @@ function updateAdHotspotLabels() {
       action.setAttribute('aria-label', actionLabel);
       action.title = actionLabel;
     });
+  });
+
+  const cards = document.querySelectorAll('.ads-card');
+  cards.forEach(card => {
+    if (!(card instanceof HTMLElement)) {
+      return;
+    }
+    const adId = card.dataset.adId;
+    const ad = adId ? state.adLookup.get(adId) : null;
+    const label = ad?.n ? String(ad.n) : getAdWindowTitle();
+    card.setAttribute('aria-label', label);
+    const actions = card.querySelectorAll('.ad-action');
+    actions.forEach(action => {
+      const key = action instanceof HTMLElement ? action.dataset.actionKey : null;
+      if (!key) {
+        return;
+      }
+      const actionLabel = getAdActionLabel(key, AD_ACTION_FALLBACKS[key] || '');
+      action.setAttribute('aria-label', actionLabel);
+      action.title = actionLabel;
+    });
+    const navigationLink = card.querySelector('.ad-details__link--navigate');
+    if (navigationLink instanceof HTMLElement) {
+      navigationLink.textContent = getAdActionLabel('navigate', AD_ACTION_FALLBACKS.navigate);
+      navigationLink.setAttribute('aria-label', getAdActionLabel('navigate', AD_ACTION_FALLBACKS.navigate));
+    }
   });
 }
 
@@ -1827,80 +2259,29 @@ function openAdById(adId) {
 
   const heading = state.dom.readingTitle;
   if (heading) {
-    heading.textContent = ad.n || windowTitle;
+    if (ad.n) {
+      heading.textContent = ad.n;
+      heading.hidden = false;
+      heading.setAttribute('aria-hidden', 'false');
+    } else {
+      heading.textContent = '';
+      heading.hidden = true;
+      heading.setAttribute('aria-hidden', 'true');
+    }
   }
-
-  const imageBase = resolveAdImageUrl(id);
-  const sources = imageBase ? [`${imageBase}.webp`, `${imageBase}.jpg`, `${imageBase}.png`] : [];
 
   content.innerHTML = '';
 
-  if (sources.length) {
+  const details = createAdDetailsSection(ad);
+  if (details) {
+    content.appendChild(details);
+  }
+
+  const image = createAdImageElement(id, ad);
+  if (image) {
     const figure = document.createElement('figure');
     figure.className = 'ad-preview';
-
-    const image = document.createElement('img');
-    image.alt = ad.n || windowTitle;
-    image.src = sources[0];
-    if (sources.length > 1) {
-      let index = 1;
-      const handleError = () => {
-        if (index >= sources.length) {
-          image.removeEventListener('error', handleError);
-          return;
-        }
-        image.src = sources[index];
-        index += 1;
-      };
-      image.addEventListener('error', handleError);
-    }
     figure.appendChild(image);
-
-    const captionLines = [];
-    if (ad.n) {
-      captionLines.push(String(ad.n));
-    }
-    const addressParts = [ad.st, ad.zi, ad.ci]
-      .map(part => (part ? String(part).trim() : ''))
-      .filter(Boolean);
-    if (addressParts.length) {
-      captionLines.push(addressParts.join(', '));
-    }
-    if (captionLines.length) {
-      const caption = document.createElement('figcaption');
-      caption.className = 'ad-preview__caption';
-      caption.textContent = captionLines.join(' · ');
-      figure.appendChild(caption);
-    }
-
-    const contactItems = [];
-    const phone = normalizePhoneNumber(ad.p);
-    if (phone) {
-      const phoneLink = document.createElement('a');
-      phoneLink.href = `tel:${phone}`;
-      phoneLink.textContent = phone;
-      phoneLink.className = 'ad-preview__contact-link';
-      phoneLink.setAttribute('aria-label', `${getAdActionLabel('call', AD_ACTION_FALLBACKS.call)} ${phone}`);
-      contactItems.push(phoneLink);
-    }
-    const website = resolveAdUrl(ad.s);
-    if (website) {
-      const siteLink = document.createElement('a');
-      siteLink.href = website;
-      siteLink.target = '_blank';
-      siteLink.rel = 'noopener noreferrer';
-      siteLink.textContent = website;
-      siteLink.className = 'ad-preview__contact-link';
-      siteLink.setAttribute('aria-label', getAdActionLabel('openLink', AD_ACTION_FALLBACKS.openLink));
-      contactItems.push(siteLink);
-    }
-    if (contactItems.length) {
-      const contact = document.createElement('div');
-      contact.className = 'ad-preview__contacts';
-      contactItems.forEach(item => contact.appendChild(item));
-      figure.appendChild(contact);
-    }
-
     content.appendChild(figure);
   } else {
     const message = document.createElement('p');
@@ -2169,7 +2550,7 @@ function handleStagePointerDown(event) {
   if (!(target instanceof Element)) {
     return;
   }
-  if (target.closest('.ad-hotspot__actions, .nav-button, .zoom-menu')) {
+  if (target.closest('.ad-actions, .nav-button, .zoom-menu')) {
     return;
   }
   beginSwipeTracking(event);
@@ -2247,6 +2628,7 @@ function toggleAllPages(forceOpen) {
     resetZoom();
     closeArchivePanel();
     closeSettingsPanel();
+    closeAdsPanel();
     overlay.classList.add('is-open');
     overlay.setAttribute('aria-hidden', 'false');
     highlightAllPages();
@@ -2544,6 +2926,8 @@ function closeReadingWindow() {
   updateReadingNavigation();
   if (state.dom.readingTitle) {
     state.dom.readingTitle.textContent = resolveLabel('readingTitle', 'Artikkeli');
+    state.dom.readingTitle.hidden = false;
+    state.dom.readingTitle.setAttribute('aria-hidden', 'false');
   }
 }
 

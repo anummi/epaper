@@ -1138,15 +1138,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const grid = document.querySelector('.ads-panel__grid');
   if (!grid) return;
 
-  imagesLoaded(grid, function() {
-    new Masonry(grid, {
-      itemSelector: '.ads-card',
-      percentPosition: true,
-      gutter: 10
+  const initMasonry = () => {
+    imagesLoaded(grid, function() {
+      new Masonry(grid, {
+        itemSelector: '.ads-card',
+        percentPosition: true,
+        gutter: 10
+      });
     });
-  });
-});
+  };
 
+  // jos modaalilla on luokka "is-open" tai se vaihtuu dynaamisesti:
+  const panel = document.querySelector('.ads-panel');
+  if (panel && panel.classList.contains('is-open')) {
+    initMasonry();
+  } else if (panel) {
+    const observer = new MutationObserver(() => {
+      if (panel.classList.contains('is-open')) {
+        initMasonry();
+      }
+    });
+    observer.observe(panel, { attributes: true, attributeFilter: ['class'] });
+  }
+});
 
 async function init() {
   state.config = window.epaperConfig;

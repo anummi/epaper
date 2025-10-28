@@ -10,13 +10,26 @@ const SUPPORTED_LANGUAGES = {
   en: 'en-US'
 };
 
+const AD_ACTION_FALLBACKS = {
+  openLink: 'Avaa verkkosivusto',
+  call: 'Soita',
+  navigate: 'Navigoi',
+  openImage: 'Avaa mainos',
+  hotspot: 'Mainostoiminnot',
+  windowTitle: 'Mainos',
+  imageUnavailable: 'Mainoksen kuva ei ole saatavilla.'
+};
+
 const state = {
   config: null,
   imagePaths: [],
   pageMaps: [],
   pageArticles: [],
+  pageAds: [],
   articleLookup: new Map(),
   articlePageLookup: new Map(),
+  adLookup: new Map(),
+  adPageLookup: new Map(),
   archiveItems: [],
   archiveLoaded: false,
   currentIssuePath: null,
@@ -26,6 +39,7 @@ const state = {
   activePageIndex: 0,
   articleOrder: [],
   currentArticleId: null,
+  currentAdId: null,
   orientation: null,
   isCompact: false,
   viewBox: null,
@@ -121,6 +135,156 @@ function getNavigationLabelByAction(action) {
     return '';
   }
   return getLocalizedValue(entry.label, '');
+}
+
+function getAdConfig() {
+  return state.config?.ads || {};
+}
+
+function getAdActionLabel(key, fallback = '') {
+  const labels = getAdConfig().labels || {};
+  const defaultValue = fallback || AD_ACTION_FALLBACKS[key] || '';
+  return getLocalizedValue(labels[key], defaultValue);
+}
+
+function getAdIconDefinition(key) {
+  const icons = getAdConfig().icons || {};
+  const icon = icons[key];
+  if (!icon || !icon.path) {
+    return null;
+  }
+  return icon;
+}
+
+function createIconElement(definition) {
+  if (!definition || !definition.path) {
+    return null;
+  }
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('viewBox', definition.viewBox || '0 0 24 24');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', definition.path);
+  svg.appendChild(path);
+  return svg;
+}
+
+function getAdWindowTitle() {
+  return getAdActionLabel('windowTitle', AD_ACTION_FALLBACKS.windowTitle);
+}
+
+function parseMapCoordinates(source) {
+  if (!source) {
+    return null;
+  }
+  const values = String(source)
+    .split(',')
+    .map(part => Number.parseFloat(part.trim()));
+  if (values.length !== 4 || values.some(value => Number.isNaN(value))) {
+    return null;
+  }
+  const [x1, y1, x2, y2] = values.map(value => value / 1000);
+  if (x2 <= x1 || y2 <= y1) {
+    return null;
+  }
+  return {
+    x1,
+    y1,
+    x2,
+    y2,
+    width: x2 - x1,
+    height: y2 - y1
+  };
+}
+
+function resolveAdUrl(value) {
+  if (!value) {
+    return null;
+  }
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/^https?:/i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
+function normalizePhoneNumber(value) {
+  if (!value) {
+    return null;
+  }
+  const cleaned = String(value).replace(/[^\d+]/g, '');
+  if (!cleaned || cleaned === '0') {
+    return null;
+  }
+  return cleaned;
+}
+
+function buildAdNavigationQuery(ad) {
+  if (!ad) {
+    return null;
+  }
+  const parts = [ad.st, ad.zi, ad.ci]
+    .map(part => (part ? String(part).trim() : ''))
+    .filter(Boolean);
+  if (!parts.length && ad.n) {
+    parts.push(String(ad.n).trim());
+  }
+  if (!parts.length) {
+    return null;
+  }
+  return parts.join(', ');
+}
+
+function resolveAdImageUrl(adId) {
+  const configId = state.config?.id;
+  const issuePath = state.currentIssuePath;
+  if (!configId || !issuePath || !adId) {
+    return null;
+  }
+  const normalized = normalizeArchivePath(issuePath);
+  return `static/${configId}/${normalized}a${adId}`;
+}
+
+function createAdActionElement({ key, href = null, target = '_self', rel = null, onClick = null, className = '' }) {
+  const label = getAdActionLabel(key, AD_ACTION_FALLBACKS[key] || '');
+  let element;
+  if (href) {
+    element = document.createElement('a');
+    element.href = href;
+    if (target) {
+      element.target = target;
+    }
+    if (rel) {
+      element.rel = rel;
+    } else if (target === '_blank') {
+      element.rel = 'noopener noreferrer';
+    }
+  } else {
+    element = document.createElement('button');
+    element.type = 'button';
+  }
+  element.classList.add('ad-action');
+  element.dataset.actionKey = key;
+  if (className) {
+    element.classList.add(className);
+  }
+  element.setAttribute('aria-label', label);
+  element.title = label;
+  const icon = createIconElement(getAdIconDefinition(key));
+  if (icon) {
+    element.appendChild(icon);
+  } else {
+    element.textContent = label;
+  }
+  if (typeof onClick === 'function') {
+    element.addEventListener('click', event => {
+      onClick(event);
+    });
+  }
+  return element;
 }
 
 function loadStoredSettings() {
@@ -440,6 +604,7 @@ function refreshLocalizedTexts(options = {}) {
   }
   dom.readingClose?.setAttribute('aria-label', resolveLabel('closeArticle', 'Sulje artikkeli'));
   updateReadingNavigation();
+  updateAdHotspotLabels();
 
   if (dom.settingsTitle) {
     dom.settingsTitle.textContent = resolveLabel('settingsTitle', 'Asetukset');
@@ -566,12 +731,31 @@ function applyIssue(issue, options = {}) {
   state.imagePaths = Array.isArray(issue.imagePaths) ? issue.imagePaths : [];
   state.pageMaps = Array.isArray(issue.pageMaps) ? issue.pageMaps : [];
   state.pageArticles = Array.isArray(issue.pageArticles) ? issue.pageArticles : [];
+  state.pageAds = Array.isArray(issue.pageAds) ? issue.pageAds : [];
   state.articleLookup = new Map(state.pageArticles.map(article => [String(article.id), article]));
   state.articlePageLookup = buildArticlePageLookup(state.pageMaps);
   state.articleOrder = state.pageArticles
     .map(article => String(article.id))
     .filter(id => Boolean(id));
   state.currentArticleId = null;
+  state.currentAdId = null;
+  state.adLookup = new Map();
+  state.adPageLookup = new Map();
+  state.pageAds.forEach((ads, pageIndex) => {
+    if (!Array.isArray(ads)) {
+      return;
+    }
+    ads.forEach(ad => {
+      if (!ad || ad.i == null) {
+        return;
+      }
+      const id = String(ad.i);
+      state.adLookup.set(id, ad);
+      if (!state.adPageLookup.has(id)) {
+        state.adPageLookup.set(id, pageIndex);
+      }
+    });
+  });
   state.viewBox = computeViewBox(issue.res);
   if (Array.isArray(issue.archiveItems) && issue.archiveItems.length) {
     state.archiveItems = issue.archiveItems;
@@ -579,6 +763,7 @@ function applyIssue(issue, options = {}) {
   if (issue.path) {
     state.currentIssuePath = normalizeArchivePath(issue.path);
   }
+  state.dom.readingWindow?.classList.remove('reading-window--ad');
   state.activePageIndex = targetPageIndex;
 
   toggleAllPages(false);
@@ -783,6 +968,7 @@ function attachGlobalListeners() {
   document.addEventListener('fullscreenchange', updateFullscreenUI);
   document.addEventListener('keydown', handleKeydown);
   window.addEventListener('resize', handleResize);
+  document.addEventListener('pointerdown', handleGlobalPointerDown);
 
   bindNavigationHandlers();
 }
@@ -811,6 +997,7 @@ function handleDarkModeChange(event) {
 
 function handleKeydown(event) {
   if (event.key === 'Escape') {
+    deactivateAllAdHotspots();
     if (document.body.classList.contains('is-zoomed')) {
       resetZoom();
       return;
@@ -856,6 +1043,17 @@ function handleKeydown(event) {
   } else if (event.key === 'ArrowLeft') {
     gotoSlide(state.currentSlide - 1);
   }
+}
+
+function handleGlobalPointerDown(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+  if (target.closest('.ad-hotspot')) {
+    return;
+  }
+  deactivateAllAdHotspots();
 }
 
 function enterFullscreen() {
@@ -918,9 +1116,35 @@ function setArticleNavButton(button, targetId, label) {
 
 function updateReadingNavigation() {
   const { readingLabel, readingPrev, readingNext } = state.dom || {};
+  const isAd = Boolean(state.currentAdId);
+
   if (readingLabel) {
-    readingLabel.textContent = resolveLabel('readingWindowTitle', 'Lukuikkuna');
+    readingLabel.textContent = isAd
+      ? getAdWindowTitle()
+      : resolveLabel('readingWindowTitle', 'Lukuikkuna');
   }
+
+  if (isAd) {
+    [readingPrev, readingNext].forEach(button => {
+      if (!button) {
+        return;
+      }
+      button.hidden = true;
+      button.setAttribute('aria-hidden', 'true');
+      button.disabled = true;
+      button.setAttribute('aria-disabled', 'true');
+      delete button.dataset.targetArticle;
+    });
+    return;
+  }
+
+  [readingPrev, readingNext].forEach(button => {
+    if (!button) {
+      return;
+    }
+    button.hidden = false;
+    button.setAttribute('aria-hidden', 'false');
+  });
 
   const prevLabel = resolveLabel('prevArticle', 'Edellinen juttu');
   const nextLabel = resolveLabel('nextArticle', 'Seuraava juttu');
@@ -938,6 +1162,9 @@ function updateReadingNavigation() {
 
 function gotoAdjacentArticle(step) {
   if (!Number.isInteger(step) || step === 0) {
+    return;
+  }
+  if (state.currentAdId) {
     return;
   }
   const order = Array.isArray(state.articleOrder) ? state.articleOrder : [];
@@ -993,6 +1220,9 @@ function openArticleById(articleId) {
     console.warn('Artikkelia ei löytynyt arkistosta:', articleId);
     return;
   }
+  state.currentAdId = null;
+  state.dom.readingWindow?.classList.remove('reading-window--ad');
+  deactivateAllAdHotspots();
   focusPageForArticle(id, { keepReadingOpen: true });
   const heading = state.dom.readingTitle;
   if (heading) {
@@ -1120,6 +1350,7 @@ async function loadIssueData(config, issuePath) {
     imagePaths,
     pageMaps: issueData.pageMaps || [],
     pageArticles: issueData.pageArticles || [],
+    pageAds: issueData.pageAds || [],
     res: issueData.res,
     archiveItems: archiveData,
     path: normalizeArchivePath(selectedEntry.p),
@@ -1236,6 +1467,8 @@ function createSlide(pages) {
       wrapper.appendChild(overlay);
     }
 
+    attachAdHotspots(wrapper, pageIndex);
+
     surface.appendChild(wrapper);
   });
 
@@ -1270,15 +1503,16 @@ function createSvgOverlay(pageIndex) {
     if (item.t !== 0 || !item.c) {
       return;
     }
-    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    const coords = item.c
-      .split(',')
-      .map(value => parseFloat(value.trim()) / 1000);
+    const coords = parseMapCoordinates(item.c);
+    if (!coords) {
+      return;
+    }
 
-    const x = (coords[0] * viewBox.width).toFixed(2);
-    const y = (coords[1] * viewBox.height).toFixed(2);
-    const width = ((coords[2] - coords[0]) * viewBox.width).toFixed(2);
-    const height = ((coords[3] - coords[1]) * viewBox.height).toFixed(2);
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    const x = (coords.x1 * viewBox.width).toFixed(2);
+    const y = (coords.y1 * viewBox.height).toFixed(2);
+    const width = (coords.width * viewBox.width).toFixed(2);
+    const height = (coords.height * viewBox.height).toFixed(2);
 
     rect.setAttribute('x', x);
     rect.setAttribute('y', y);
@@ -1307,6 +1541,311 @@ function createSvgOverlay(pageIndex) {
   });
 
   return svg;
+}
+
+function attachAdHotspots(container, pageIndex) {
+  const adsForPage = Array.isArray(state.pageAds?.[pageIndex]) ? state.pageAds[pageIndex] : [];
+  const mapItems = Array.isArray(state.pageMaps?.[pageIndex]) ? state.pageMaps[pageIndex] : [];
+  if (!adsForPage.length || !mapItems.length) {
+    return;
+  }
+
+  const adLookup = new Map();
+  adsForPage.forEach(ad => {
+    if (!ad || ad.i == null) {
+      return;
+    }
+    adLookup.set(String(ad.i), ad);
+  });
+
+  const hotspots = mapItems
+    .filter(item => item && item.t === 1 && item.c && item.id != null)
+    .map(item => {
+      const ad = adLookup.get(String(item.id));
+      return createAdHotspot(pageIndex, item, ad);
+    })
+    .filter(Boolean);
+
+  if (!hotspots.length) {
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'page-ad-hotspots';
+  hotspots.forEach(hotspot => overlay.appendChild(hotspot));
+  container.appendChild(overlay);
+}
+
+function createAdHotspot(pageIndex, mapItem, ad) {
+  if (!mapItem || !ad) {
+    return null;
+  }
+  const coords = parseMapCoordinates(mapItem.c);
+  if (!coords) {
+    return null;
+  }
+
+  const adId = String(ad.i ?? mapItem.id);
+  const hotspot = document.createElement('div');
+  hotspot.className = 'ad-hotspot';
+  hotspot.dataset.adId = adId;
+  hotspot.dataset.pageIndex = String(pageIndex);
+  hotspot.style.left = `${coords.x1 * 100}%`;
+  hotspot.style.top = `${coords.y1 * 100}%`;
+  hotspot.style.width = `${coords.width * 100}%`;
+  hotspot.style.height = `${coords.height * 100}%`;
+
+  const accessibleLabel = ad.n ? String(ad.n) : getAdActionLabel('hotspot', AD_ACTION_FALLBACKS.hotspot);
+  hotspot.setAttribute('role', 'button');
+  hotspot.setAttribute('tabindex', '0');
+  hotspot.setAttribute('aria-label', accessibleLabel);
+
+  const actions = document.createElement('div');
+  actions.className = 'ad-hotspot__actions';
+  ['pointerdown', 'pointerup'].forEach(type => {
+    actions.addEventListener(type, event => event.stopPropagation());
+  });
+  actions.addEventListener('click', event => event.stopPropagation());
+
+  const buttons = [];
+
+  const website = resolveAdUrl(ad.s);
+  if (website) {
+    const websiteButton = createAdActionElement({
+      key: 'openLink',
+      href: website,
+      target: '_blank'
+    });
+    websiteButton.addEventListener('click', () => deactivateAdHotspot(hotspot));
+    buttons.push(websiteButton);
+  }
+
+  const phone = normalizePhoneNumber(ad.p);
+  if (phone) {
+    const callButton = createAdActionElement({
+      key: 'call',
+      href: `tel:${phone}`
+    });
+    callButton.addEventListener('click', () => deactivateAdHotspot(hotspot));
+    buttons.push(callButton);
+  }
+
+  const navigationQuery = buildAdNavigationQuery(ad);
+  if (navigationQuery) {
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(navigationQuery)}`;
+    const navigateButton = createAdActionElement({
+      key: 'navigate',
+      href: mapsUrl,
+      target: '_blank'
+    });
+    navigateButton.addEventListener('click', () => deactivateAdHotspot(hotspot));
+    buttons.push(navigateButton);
+  }
+
+  const openButton = createAdActionElement({ key: 'openImage' });
+  openButton.addEventListener('click', event => {
+    event.preventDefault();
+    openAdById(adId);
+    deactivateAdHotspot(hotspot);
+  });
+  buttons.push(openButton);
+
+  if (!buttons.length) {
+    return null;
+  }
+
+  buttons.forEach(button => actions.appendChild(button));
+  hotspot.appendChild(actions);
+
+  hotspot.addEventListener('pointerenter', () => activateAdHotspot(hotspot));
+  hotspot.addEventListener('pointerleave', () => deactivateAdHotspot(hotspot));
+  hotspot.addEventListener('click', event => {
+    if (event.target.closest('.ad-action')) {
+      return;
+    }
+    event.preventDefault();
+    if (hotspot.classList.contains('is-active')) {
+      deactivateAdHotspot(hotspot);
+    } else {
+      activateAdHotspot(hotspot);
+    }
+  });
+  hotspot.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (hotspot.classList.contains('is-active')) {
+        deactivateAdHotspot(hotspot);
+      } else {
+        activateAdHotspot(hotspot);
+      }
+    }
+  });
+
+  return hotspot;
+}
+
+function activateAdHotspot(hotspot) {
+  if (!hotspot) {
+    return;
+  }
+  document.querySelectorAll('.ad-hotspot.is-active').forEach(element => {
+    if (element !== hotspot) {
+      element.classList.remove('is-active');
+    }
+  });
+  hotspot.classList.add('is-active');
+}
+
+function deactivateAdHotspot(hotspot) {
+  if (!hotspot) {
+    return;
+  }
+  hotspot.classList.remove('is-active');
+}
+
+function deactivateAllAdHotspots() {
+  document.querySelectorAll('.ad-hotspot.is-active').forEach(element => {
+    element.classList.remove('is-active');
+  });
+}
+
+function updateAdHotspotLabels() {
+  const hotspots = document.querySelectorAll('.ad-hotspot');
+  hotspots.forEach(hotspot => {
+    if (!(hotspot instanceof HTMLElement)) {
+      return;
+    }
+    const adId = hotspot.dataset.adId;
+    const ad = adId ? state.adLookup.get(adId) : null;
+    const label = ad?.n ? String(ad.n) : getAdActionLabel('hotspot', AD_ACTION_FALLBACKS.hotspot);
+    hotspot.setAttribute('aria-label', label);
+    const actions = hotspot.querySelectorAll('.ad-action');
+    actions.forEach(action => {
+      const key = action instanceof HTMLElement ? action.dataset.actionKey : null;
+      if (!key) {
+        return;
+      }
+      const actionLabel = getAdActionLabel(key, AD_ACTION_FALLBACKS[key] || '');
+      action.setAttribute('aria-label', actionLabel);
+      action.title = actionLabel;
+    });
+  });
+}
+
+function openAdById(adId) {
+  if (!adId) {
+    return;
+  }
+  const id = String(adId);
+  const ad = state.adLookup.get(id);
+  if (!ad) {
+    console.warn('Mainosta ei löytynyt:', adId);
+    return;
+  }
+
+  const readingWindow = state.dom.readingWindow;
+  const content = state.dom.readingContent;
+  if (!readingWindow || !content) {
+    return;
+  }
+
+  deactivateAllAdHotspots();
+
+  state.currentAdId = id;
+  state.currentArticleId = null;
+
+  const windowTitle = getAdWindowTitle();
+  if (state.dom.readingLabel) {
+    state.dom.readingLabel.textContent = windowTitle;
+  }
+
+  readingWindow.classList.add('reading-window--ad');
+  openReadingWindow();
+
+  const heading = state.dom.readingTitle;
+  if (heading) {
+    heading.textContent = ad.n || windowTitle;
+  }
+
+  const imageBase = resolveAdImageUrl(id);
+  const sources = imageBase ? [`${imageBase}.webp`, `${imageBase}.jpg`, `${imageBase}.png`] : [];
+
+  content.innerHTML = '';
+
+  if (sources.length) {
+    const figure = document.createElement('figure');
+    figure.className = 'ad-preview';
+
+    const image = document.createElement('img');
+    image.alt = ad.n || windowTitle;
+    image.src = sources[0];
+    if (sources.length > 1) {
+      let index = 1;
+      const handleError = () => {
+        if (index >= sources.length) {
+          image.removeEventListener('error', handleError);
+          return;
+        }
+        image.src = sources[index];
+        index += 1;
+      };
+      image.addEventListener('error', handleError);
+    }
+    figure.appendChild(image);
+
+    const captionLines = [];
+    if (ad.n) {
+      captionLines.push(String(ad.n));
+    }
+    const addressParts = [ad.st, ad.zi, ad.ci]
+      .map(part => (part ? String(part).trim() : ''))
+      .filter(Boolean);
+    if (addressParts.length) {
+      captionLines.push(addressParts.join(', '));
+    }
+    if (captionLines.length) {
+      const caption = document.createElement('figcaption');
+      caption.className = 'ad-preview__caption';
+      caption.textContent = captionLines.join(' · ');
+      figure.appendChild(caption);
+    }
+
+    const contactItems = [];
+    const phone = normalizePhoneNumber(ad.p);
+    if (phone) {
+      const phoneLink = document.createElement('a');
+      phoneLink.href = `tel:${phone}`;
+      phoneLink.textContent = phone;
+      phoneLink.className = 'ad-preview__contact-link';
+      phoneLink.setAttribute('aria-label', `${getAdActionLabel('call', AD_ACTION_FALLBACKS.call)} ${phone}`);
+      contactItems.push(phoneLink);
+    }
+    const website = resolveAdUrl(ad.s);
+    if (website) {
+      const siteLink = document.createElement('a');
+      siteLink.href = website;
+      siteLink.target = '_blank';
+      siteLink.rel = 'noopener noreferrer';
+      siteLink.textContent = website;
+      siteLink.className = 'ad-preview__contact-link';
+      siteLink.setAttribute('aria-label', getAdActionLabel('openLink', AD_ACTION_FALLBACKS.openLink));
+      contactItems.push(siteLink);
+    }
+    if (contactItems.length) {
+      const contact = document.createElement('div');
+      contact.className = 'ad-preview__contacts';
+      contactItems.forEach(item => contact.appendChild(item));
+      figure.appendChild(contact);
+    }
+
+    content.appendChild(figure);
+  } else {
+    const message = document.createElement('p');
+    message.textContent = getAdActionLabel('imageUnavailable', AD_ACTION_FALLBACKS.imageUnavailable);
+    content.appendChild(message);
+  }
+
+  updateReadingNavigation();
 }
 
 function handleRectClick(event) {
@@ -1350,6 +1889,7 @@ function updateActiveSlide(index, options = {}) {
     return;
   }
   current.element.classList.add('is-active');
+  deactivateAllAdHotspots();
   const nextActivePageIndex = Number.isInteger(activePageIndex)
     ? activePageIndex
     : current.pages[0];
@@ -1916,12 +2456,15 @@ function closeReadingWindow() {
   }
   readingWindow.classList.remove('is-open');
   readingWindow.setAttribute('aria-hidden', 'true');
+  readingWindow.classList.remove('reading-window--ad');
   document.body.classList.remove('reading-open');
   if (readingBackdrop) {
     readingBackdrop.classList.remove('is-visible');
     readingBackdrop.setAttribute('aria-hidden', 'true');
   }
   state.currentArticleId = null;
+  state.currentAdId = null;
+  deactivateAllAdHotspots();
   updateReadingNavigation();
   if (state.dom.readingTitle) {
     state.dom.readingTitle.textContent = resolveLabel('readingTitle', 'Artikkeli');

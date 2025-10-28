@@ -70,6 +70,37 @@ const swipeState = {
   isSwipe: false
 };
 
+function getEmbeddedStore(config) {
+  if (!config || !config.id) {
+    return null;
+  }
+  const store = window.__EPAPER_EMBEDDED_DATA__ || null;
+  if (!store) {
+    return null;
+  }
+  return store[config.id] || store[String(config.id)] || null;
+}
+
+function getEmbeddedArchive(config) {
+  const store = getEmbeddedStore(config);
+  if (!store || !Array.isArray(store.archive) || store.archive.length === 0) {
+    return null;
+  }
+  return store.archive;
+}
+
+function getEmbeddedIssue(config, issuePath) {
+  if (!issuePath) {
+    return null;
+  }
+  const store = getEmbeddedStore(config);
+  if (!store || !store.issues) {
+    return null;
+  }
+  const normalized = normalizeArchivePath(issuePath);
+  return store.issues[normalized] || store.issues[issuePath] || null;
+}
+
 function normalizeLanguage(value) {
   if (!value) {
     return null;
@@ -1445,6 +1476,7 @@ async function loadIssueData(config, issuePath) {
   let archiveData = Array.isArray(state.archiveItems) && state.archiveItems.length
     ? state.archiveItems
     : null;
+  const embeddedArchive = getEmbeddedArchive(config);
   const normalizedTargetPath = issuePath ? normalizeArchivePath(issuePath) : null;
 
   console.groupCollapsed('loadIssueData');
@@ -1459,18 +1491,32 @@ async function loadIssueData(config, issuePath) {
     if (!archiveData) {
       const archiveUrl = `${rootPath}/${config.paper}_arch.htm`;
       console.info('Haetaan arkistodata', archiveUrl);
-      const archiveResponse = await fetch(archiveUrl);
-      if (!archiveResponse.ok) {
-        throw new Error(`Arkistotiedoston lataus epäonnistui: ${archiveResponse.status}`);
+      try {
+        const archiveResponse = await fetch(archiveUrl);
+        if (!archiveResponse.ok) {
+          throw new Error(`Arkistotiedoston lataus epäonnistui: ${archiveResponse.status}`);
+        }
+        const parsed = await archiveResponse.json();
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          throw new Error('Arkistodata on tyhjä.');
+        }
+        archiveData = parsed;
+        console.info('Arkistodata ladattu', { entries: archiveData.length });
+      } catch (error) {
+        if (embeddedArchive) {
+          console.warn('Arkistodatan lataus epäonnistui, käytetään upotettua dataa.', error);
+          archiveData = embeddedArchive;
+        } else {
+          throw error;
+        }
       }
-      const parsed = await archiveResponse.json();
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        throw new Error('Arkistodata on tyhjä.');
-      }
-      archiveData = parsed;
-      console.info('Arkistodata ladattu', { entries: archiveData.length });
     } else {
       console.info('Käytetään välimuistissa olevaa arkistodataa', { entries: archiveData.length });
+    }
+
+    if (!archiveData && embeddedArchive) {
+      console.info('Arkistodataa ei löytynyt verkosta, käytetään upotettua dataa.');
+      archiveData = embeddedArchive;
     }
 
     state.archiveLoaded = true;
@@ -1485,12 +1531,24 @@ async function loadIssueData(config, issuePath) {
 
     const issueUrl = `${rootPath}/${selectedEntry.p}${config.paper}_cont.htm`;
     console.info('Haetaan numeron data', issueUrl);
-    const issueResponse = await fetch(issueUrl);
-    if (!issueResponse.ok) {
-      throw new Error(`Lehden datan lataus epäonnistui: ${issueResponse.status}`);
+    let issueData;
+    try {
+      const issueResponse = await fetch(issueUrl);
+      if (!issueResponse.ok) {
+        throw new Error(`Lehden datan lataus epäonnistui: ${issueResponse.status}`);
+      }
+      issueData = await issueResponse.json();
+    } catch (error) {
+      const embeddedIssue = getEmbeddedIssue(config, selectedEntry.p);
+      if (embeddedIssue) {
+        console.warn('Lehden datan lataus epäonnistui, käytetään upotettua dataa.', error);
+        issueData = embeddedIssue;
+      } else {
+        throw error;
+      }
     }
-    const issueData = await issueResponse.json();
-    if (!issueData.pages) {
+
+    if (!issueData?.pages) {
       throw new Error('Lehden sivumäärää ei löytynyt.');
     }
 

@@ -75,7 +75,9 @@ body.menu-collapsed {
   --menu-width: var(--menu-collapsed-width);
   --menu-padding: var(--menu-width);
 }
-
+#app-root {
+    width: 100%;
+}
 .app-shell {
   position: relative;
   display: flex;

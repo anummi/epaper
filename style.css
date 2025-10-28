@@ -321,8 +321,7 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
 }
 
 .maprect {
-  fill: rgba(0, 87, 184, 0.12);
-  stroke: rgba(0, 87, 184, 0.45);
+  fill: rgba(0, 0, 0, 0);
   stroke-width: 2;
   pointer-events: auto;
   cursor: pointer;
@@ -331,8 +330,7 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
 
 .maprect:hover,
 .maprect:focus-visible {
-  fill: rgba(0, 87, 184, 0.24);
-  stroke: rgba(0, 87, 184, 0.7);
+  fill: rgba(142, 190, 199, 0.3);
 }
 
 body.is-zoomed .maprect {

@@ -7,6 +7,7 @@ const articleBaseUrl = 'https://sandbox-devtest2.anygraaf.net/';
 const SETTINGS_STORAGE_KEY = 'epaper-settings';
 const AUDIO_PROGRESS_STORAGE_KEY = 'epaper-audio-progress';
 const AUDIO_PRODUCT_ID = 49;
+const AUDIO_KEYBOARD_SEEK_SECONDS = 10;
 const SUPPORTED_LANGUAGES = {
   fi: 'fi-FI',
   en: 'en-US'
@@ -99,6 +100,8 @@ const swipeState = {
   isTracking: false,
   isSwipe: false
 };
+
+let adsResizeObserver = null;
 
 function normalizeLanguage(value) {
   if (!value) {
@@ -1530,6 +1533,21 @@ function handleKeydown(event) {
     }
   }
 
+  const audioElement = state.audio.audioElement;
+  const audioActive = Boolean(
+    state.audio.isPlaying &&
+    state.audio.currentIndex >= 0 &&
+    audioElement &&
+    (typeof HTMLAudioElement === 'undefined' || audioElement instanceof HTMLAudioElement)
+  );
+
+  if (audioActive && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
+    event.preventDefault();
+    const direction = event.key === 'ArrowRight' ? 1 : -1;
+    seekAudioBy(direction * AUDIO_KEYBOARD_SEEK_SECONDS);
+    return;
+  }
+
   const isReadingOpen = state.dom.readingWindow?.classList.contains('is-open');
   if (isReadingOpen) {
     if (event.key === 'ArrowRight') {
@@ -1797,6 +1815,7 @@ function closeAdsPanel() {
   panel.classList.remove('is-open');
   panel.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('ads-open');
+  disconnectAdsResizeObserver();
 }
 
 function isAdsPanelOpen() {
@@ -1885,12 +1904,67 @@ function collectAdsInOrder() {
   return ads;
 }
 
+function disconnectAdsResizeObserver() {
+  if (adsResizeObserver) {
+    adsResizeObserver.disconnect();
+  }
+}
+
+function ensureAdsResizeObserver() {
+  if (adsResizeObserver || typeof ResizeObserver === 'undefined') {
+    return adsResizeObserver;
+  }
+  adsResizeObserver = new ResizeObserver(entries => {
+    if (!Array.isArray(entries) || !entries.length) {
+      return;
+    }
+    const metrics = getAdsGridMetrics();
+    if (!metrics) {
+      return;
+    }
+    entries.forEach(entry => {
+      const target = entry?.target;
+      if (target instanceof HTMLElement) {
+        updateAdsCardSpan(target, metrics);
+      }
+    });
+  });
+  return adsResizeObserver;
+}
+
+function getAdsGridMetrics() {
+  const grid = state.dom.adsGrid;
+  if (!grid) {
+    return null;
+  }
+  const styles = window.getComputedStyle(grid);
+  const rowHeight = Number.parseFloat(styles.getPropertyValue('--ads-grid-row-height')) || 12;
+  const gapValue = styles.rowGap || styles.getPropertyValue('grid-row-gap') || styles.gap || '0';
+  const rowGap = Number.parseFloat(gapValue) || 0;
+  return { grid, rowHeight, rowGap };
+}
+
+function updateAdsCardSpan(card, metrics = getAdsGridMetrics()) {
+  if (!(card instanceof HTMLElement) || !metrics) {
+    return;
+  }
+  const { rowHeight, rowGap } = metrics;
+  const rect = card.getBoundingClientRect();
+  const totalHeight = rect?.height || 0;
+  if (!(totalHeight > 0)) {
+    return;
+  }
+  const span = Math.max(Math.ceil((totalHeight + rowGap) / (rowHeight + rowGap)), 1);
+  card.style.gridRowEnd = `span ${span}`;
+}
+
 function buildAdsPanelContent() {
   const grid = state.dom.adsGrid;
   const emptyMessage = state.dom.adsEmpty;
   if (!grid) {
     return;
   }
+  disconnectAdsResizeObserver();
   grid.innerHTML = '';
   const ads = collectAdsInOrder();
   if (!ads.length) {
@@ -1912,6 +1986,10 @@ function buildAdsPanelContent() {
     }
   });
   grid.appendChild(fragment);
+  const observer = ensureAdsResizeObserver();
+  if (observer) {
+    grid.querySelectorAll('.ads-card').forEach(card => observer.observe(card));
+  }
   requestAnimationFrame(() => sizeAdsPanelItems());
 }
 
@@ -2008,18 +2086,12 @@ function sizeAdsPanelItems() {
   if (!cards.length) {
     return;
   }
-  const styles = window.getComputedStyle(grid);
-  const rowHeight = Number.parseFloat(styles.getPropertyValue('--ads-grid-row-height')) || 12;
-  const gapValue = styles.rowGap || styles.getPropertyValue('grid-row-gap') || styles.gap || '0';
-  const rowGap = Number.parseFloat(gapValue) || 0;
-  cards.forEach(card => card.style.removeProperty('grid-row-end'));
   requestAnimationFrame(() => {
-    cards.forEach(card => {
-      const rect = card.getBoundingClientRect();
-      const totalHeight = rect.height;
-      const span = Math.max(Math.ceil((totalHeight + rowGap) / (rowHeight + rowGap)), 1);
-      card.style.gridRowEnd = `span ${span}`;
-    });
+    const metrics = getAdsGridMetrics();
+    if (!metrics) {
+      return;
+    }
+    cards.forEach(card => updateAdsCardSpan(card, metrics));
   });
 }
 
@@ -2215,6 +2287,24 @@ function skipAudio(step) {
     return;
   }
   startAudioFromIndex(nextIndex);
+}
+
+function seekAudioBy(seconds) {
+  const audio = state.audio.audioElement;
+  if (!audio || !Number.isFinite(seconds) || seconds === 0) {
+    return;
+  }
+  const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  const duration = Number.isFinite(audio.duration) ? audio.duration : null;
+  let target = current + seconds;
+  if (duration != null) {
+    target = clamp(target, 0, duration);
+  } else {
+    target = Math.max(0, target);
+  }
+  if (Number.isFinite(target)) {
+    audio.currentTime = target;
+  }
 }
 
 function stopAudioPlayback(options = {}) {

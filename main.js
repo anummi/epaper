@@ -78,7 +78,17 @@ const panState = {
   startX: 0,
   startY: 0,
   baseX: 0,
-  baseY: 0
+  baseY: 0,
+  surface: null
+};
+
+const pointerTracker = new Map();
+
+const pinchState = {
+  active: false,
+  surface: null,
+  initialDistance: 0,
+  initialScale: 1
 };
 
 const swipeState = {
@@ -783,6 +793,12 @@ function buildLayout() {
   settingsPanel.appendChild(settingsDialog);
   shell.appendChild(settingsPanel);
 
+  const audioBackdrop = document.createElement('div');
+  audioBackdrop.className = 'audio-player__backdrop';
+  audioBackdrop.hidden = true;
+  audioBackdrop.setAttribute('aria-hidden', 'true');
+  shell.appendChild(audioBackdrop);
+
   const audioPlayer = document.createElement('section');
   audioPlayer.className = 'audio-player';
   audioPlayer.setAttribute('aria-hidden', 'true');
@@ -858,27 +874,34 @@ function buildLayout() {
   audioStatus.setAttribute('aria-live', 'polite');
   audioPlayer.appendChild(audioStatus);
 
-  const audioResume = document.createElement('div');
-  audioResume.className = 'audio-player__resume';
-  audioResume.hidden = true;
-  audioResume.setAttribute('aria-hidden', 'true');
+  shell.appendChild(audioPlayer);
+
+  const audioResumeOverlay = document.createElement('div');
+  audioResumeOverlay.className = 'audio-resume';
+  audioResumeOverlay.hidden = true;
+  audioResumeOverlay.setAttribute('aria-hidden', 'true');
+  audioResumeOverlay.setAttribute('role', 'dialog');
+  audioResumeOverlay.setAttribute('aria-modal', 'true');
+  const audioResumeDialog = document.createElement('div');
+  audioResumeDialog.className = 'audio-resume__dialog';
   const audioResumeMessage = document.createElement('p');
-  audioResumeMessage.className = 'audio-player__resume-message';
+  audioResumeMessage.className = 'audio-resume__message';
+  audioResumeMessage.id = 'audio-resume-message';
+  audioResumeOverlay.setAttribute('aria-labelledby', 'audio-resume-message');
   const audioResumeActions = document.createElement('div');
-  audioResumeActions.className = 'audio-player__resume-actions';
+  audioResumeActions.className = 'audio-resume__actions';
   const audioResumeContinue = document.createElement('button');
   audioResumeContinue.type = 'button';
-  audioResumeContinue.className = 'audio-player__resume-button audio-player__resume-button--primary';
+  audioResumeContinue.className = 'audio-resume__button audio-resume__button--primary';
   const audioResumeRestart = document.createElement('button');
   audioResumeRestart.type = 'button';
-  audioResumeRestart.className = 'audio-player__resume-button audio-player__resume-button--secondary';
+  audioResumeRestart.className = 'audio-resume__button audio-resume__button--secondary';
   audioResumeActions.appendChild(audioResumeContinue);
   audioResumeActions.appendChild(audioResumeRestart);
-  audioResume.appendChild(audioResumeMessage);
-  audioResume.appendChild(audioResumeActions);
-  audioPlayer.appendChild(audioResume);
-
-  shell.appendChild(audioPlayer);
+  audioResumeDialog.appendChild(audioResumeMessage);
+  audioResumeDialog.appendChild(audioResumeActions);
+  audioResumeOverlay.appendChild(audioResumeDialog);
+  shell.appendChild(audioResumeOverlay);
 
   const audioElement = new Audio();
   audioElement.preload = 'auto';
@@ -928,6 +951,7 @@ function buildLayout() {
     languageSelect,
     darkModeLabel: darkModeSpan,
     darkModeToggle,
+    audioBackdrop,
     audioPlayer,
     audioTitle,
     audioPage,
@@ -939,7 +963,7 @@ function buildLayout() {
     audioTimeTotal,
     audioTimeline,
     audioStatus,
-    audioResume,
+    audioResumeOverlay,
     audioResumeMessage,
     audioResumeContinue,
     audioResumeRestart
@@ -1368,11 +1392,13 @@ function attachGlobalListeners() {
     settingsClose,
     languageSelect,
     darkModeToggle,
+    audioBackdrop,
     audioClose,
     audioPrev,
     audioPlay,
     audioNext,
     audioTimeline,
+    audioResumeOverlay,
     audioResumeContinue,
     audioResumeRestart
   } = state.dom;
@@ -1432,6 +1458,7 @@ function attachGlobalListeners() {
   audioPlay?.addEventListener('click', toggleAudioPlayback);
   audioTimeline?.addEventListener('click', handleAudioTimelineClick);
   audioTimeline?.addEventListener('keydown', handleAudioTimelineKeydown);
+  audioBackdrop?.addEventListener('click', () => stopAudioPlayback());
   audioResumeContinue?.addEventListener('click', handleAudioResumeContinue);
   audioResumeRestart?.addEventListener('click', handleAudioResumeRestart);
 
@@ -1473,6 +1500,10 @@ function handleDarkModeChange(event) {
 function handleKeydown(event) {
   if (event.key === 'Escape') {
     deactivateAllAdHotspots();
+    if (state.audio.playerVisible) {
+      stopAudioPlayback();
+      return;
+    }
     if (document.body.classList.contains('is-zoomed')) {
       resetZoom();
       return;
@@ -1974,7 +2005,22 @@ function sizeAdsPanelItems() {
     return;
   }
   const cards = grid.querySelectorAll('.ads-card');
+  if (!cards.length) {
+    return;
+  }
+  const styles = window.getComputedStyle(grid);
+  const rowHeight = Number.parseFloat(styles.getPropertyValue('--ads-grid-row-height')) || 12;
+  const gapValue = styles.rowGap || styles.getPropertyValue('grid-row-gap') || styles.gap || '0';
+  const rowGap = Number.parseFloat(gapValue) || 0;
   cards.forEach(card => card.style.removeProperty('grid-row-end'));
+  requestAnimationFrame(() => {
+    cards.forEach(card => {
+      const rect = card.getBoundingClientRect();
+      const totalHeight = rect.height;
+      const span = Math.max(Math.ceil((totalHeight + rowGap) / (rowHeight + rowGap)), 1);
+      card.style.gridRowEnd = `span ${span}`;
+    });
+  });
 }
 
 function bindAudioElementEvents(audio) {
@@ -2198,14 +2244,18 @@ function showAudioResumePrompt() {
   }
   state.audio.resumePromptVisible = true;
   updateAudioUI();
+  requestAnimationFrame(() => {
+    state.dom.audioResumeContinue?.focus({ preventScroll: true });
+  });
 }
 
 function hideAudioResumePrompt() {
   state.audio.resumePromptVisible = false;
-  const resume = state.dom.audioResume;
+  const resume = state.dom.audioResumeOverlay;
   if (resume) {
     resume.hidden = true;
     resume.setAttribute('aria-hidden', 'true');
+    resume.classList.remove('is-visible');
   }
 }
 
@@ -2275,6 +2325,7 @@ function handleAudioTimelineKeydown(event) {
 
 function updateAudioUI() {
   const {
+    audioBackdrop,
     audioPlayer,
     audioTitle,
     audioPage,
@@ -2286,7 +2337,7 @@ function updateAudioUI() {
     audioTimeTotal,
     audioTimeline,
     audioStatus,
-    audioResume,
+    audioResumeOverlay,
     audioResumeMessage,
     audioResumeContinue,
     audioResumeRestart
@@ -2295,10 +2346,20 @@ function updateAudioUI() {
   const entry = getCurrentAudioEntry();
   const audio = state.audio.audioElement;
 
+  const playerVisible = Boolean(state.audio.playerVisible);
+
   if (audioPlayer) {
-    audioPlayer.classList.toggle('is-visible', state.audio.playerVisible);
-    audioPlayer.setAttribute('aria-hidden', state.audio.playerVisible ? 'false' : 'true');
+    audioPlayer.classList.toggle('is-visible', playerVisible);
+    audioPlayer.setAttribute('aria-hidden', playerVisible ? 'false' : 'true');
   }
+
+  if (audioBackdrop) {
+    audioBackdrop.hidden = !playerVisible;
+    audioBackdrop.setAttribute('aria-hidden', playerVisible ? 'false' : 'true');
+    audioBackdrop.classList.toggle('is-visible', playerVisible);
+  }
+
+  document.body.classList.toggle('audio-player-open', playerVisible);
 
   if (audioTitle) {
     const fallbackTitle = resolveLabel('audioPlayerTitle', 'Kuuntele lehti');
@@ -2377,10 +2438,11 @@ function updateAudioUI() {
     audioStatus.textContent = message;
   }
 
-  if (audioResume && audioResumeMessage && audioResumeContinue && audioResumeRestart) {
+  if (audioResumeOverlay && audioResumeMessage && audioResumeContinue && audioResumeRestart) {
     const showResume = Boolean(state.audio.resumePromptVisible && state.audio.resume);
-    audioResume.hidden = !showResume;
-    audioResume.setAttribute('aria-hidden', showResume ? 'false' : 'true');
+    audioResumeOverlay.hidden = !showResume;
+    audioResumeOverlay.setAttribute('aria-hidden', showResume ? 'false' : 'true');
+    audioResumeOverlay.classList.toggle('is-visible', showResume);
     audioResumeContinue.textContent = resolveLabel('audioResumeContinue', 'Jatka kuuntelua');
     audioResumeRestart.textContent = resolveLabel('audioResumeRestart', 'Aloita alusta');
     if (showResume) {
@@ -3229,7 +3291,109 @@ function beginSwipeTracking(event) {
   swipeState.isSwipe = false;
 }
 
+function updatePointerTracker(event) {
+  pointerTracker.set(event.pointerId, { x: event.clientX, y: event.clientY });
+}
+
+function removePointerFromTracker(event) {
+  pointerTracker.delete(event.pointerId);
+}
+
+function getTrackedPointerEntries() {
+  return Array.from(pointerTracker.entries()).slice(0, 2);
+}
+
+function beginPinch(surface) {
+  const entries = getTrackedPointerEntries();
+  if (entries.length < 2) {
+    return;
+  }
+  const [firstEntry, secondEntry] = entries;
+  const first = firstEntry[1];
+  const second = secondEntry[1];
+  const distance = Math.hypot(second.x - first.x, second.y - first.y);
+  if (!(distance > 0)) {
+    return;
+  }
+  const targetSurface = surface instanceof Element ? surface : getActiveSurface();
+  pinchState.active = true;
+  pinchState.surface = targetSurface;
+  pinchState.initialDistance = distance;
+  pinchState.initialScale = state.zoom.scale;
+  panState.active = false;
+  panState.pointerId = null;
+  panState.surface = targetSurface || null;
+  swipeState.isTracking = false;
+  swipeState.pointerId = null;
+  swipeState.isSwipe = false;
+}
+
+function applyPinchGesture() {
+  if (!pinchState.active) {
+    return;
+  }
+  const entries = getTrackedPointerEntries();
+  if (entries.length < 2 || pinchState.initialDistance <= 0) {
+    return;
+  }
+  const [firstEntry, secondEntry] = entries;
+  const first = firstEntry[1];
+  const second = secondEntry[1];
+  const distance = Math.hypot(second.x - first.x, second.y - first.y);
+  if (!(distance > 0)) {
+    return;
+  }
+  const scaleFactor = distance / pinchState.initialDistance;
+  const nextScale = pinchState.initialScale * scaleFactor;
+  const center = {
+    x: (first.x + second.x) / 2,
+    y: (first.y + second.y) / 2
+  };
+  setZoom(nextScale, center);
+}
+
+function endPinchGesture() {
+  if (!pinchState.active) {
+    return;
+  }
+  const surface = pinchState.surface || getActiveSurface();
+  pinchState.active = false;
+  pinchState.surface = null;
+  pinchState.initialDistance = 0;
+  pinchState.initialScale = state.zoom.scale;
+  if (pointerTracker.size === 1 && surface && state.zoom.scale > 1) {
+    const iterator = pointerTracker.entries().next();
+    if (!iterator.done) {
+      const [pointerId, point] = iterator.value;
+      panState.active = true;
+      panState.pointerId = pointerId;
+      panState.startX = point.x;
+      panState.startY = point.y;
+      panState.baseX = state.zoom.translateX;
+      panState.baseY = state.zoom.translateY;
+      panState.surface = surface;
+      return;
+    }
+  }
+  panState.active = false;
+  panState.pointerId = null;
+  panState.surface = surface || null;
+}
+
 function startPan(event) {
+  const surface = event.currentTarget;
+  if (!(surface instanceof Element)) {
+    return;
+  }
+  updatePointerTracker(event);
+  surface.setPointerCapture(event.pointerId);
+  if (event.pointerType === 'touch' && pointerTracker.size >= 2) {
+    beginPinch(surface);
+    return;
+  }
+  if (pinchState.active) {
+    return;
+  }
   if (state.zoom.scale === 1) {
     beginSwipeTracking(event);
     return;
@@ -3238,14 +3402,13 @@ function startPan(event) {
   swipeState.pointerId = null;
   swipeState.isSwipe = false;
   event.preventDefault();
-  const surface = event.currentTarget;
-  surface.setPointerCapture(event.pointerId);
   panState.active = true;
   panState.pointerId = event.pointerId;
   panState.startX = event.clientX;
   panState.startY = event.clientY;
   panState.baseX = state.zoom.translateX;
   panState.baseY = state.zoom.translateY;
+  panState.surface = surface;
 }
 
 function handleStagePointerDown(event) {
@@ -3263,6 +3426,17 @@ function handleStagePointerDown(event) {
 }
 
 function movePan(event) {
+  if (pointerTracker.has(event.pointerId)) {
+    updatePointerTracker(event);
+  }
+  if (pinchState.active) {
+    if (pointerTracker.size >= 2) {
+      event.preventDefault();
+      applyPinchGesture();
+      return;
+    }
+    endPinchGesture();
+  }
   if (swipeState.isTracking && event.pointerId === swipeState.pointerId) {
     const dx = event.clientX - swipeState.startX;
     const dy = event.clientY - swipeState.startY;
@@ -3275,7 +3449,10 @@ function movePan(event) {
     return;
   }
   event.preventDefault();
-  const surface = event.currentTarget;
+  const surface = panState.surface || event.currentTarget;
+  if (!(surface instanceof Element)) {
+    return;
+  }
   const dx = event.clientX - panState.startX;
   const dy = event.clientY - panState.startY;
   const constrained = constrainTranslation(surface, panState.baseX + dx, panState.baseY + dy, state.zoom.scale);
@@ -3285,6 +3462,12 @@ function movePan(event) {
 }
 
 function endPan(event) {
+  if (pointerTracker.has(event.pointerId)) {
+    removePointerFromTracker(event);
+  }
+  if (pinchState.active && pointerTracker.size < 2) {
+    endPinchGesture();
+  }
   if (swipeState.isTracking && event.pointerId === swipeState.pointerId) {
     const isCancel = event.type === 'pointercancel';
     if (!isCancel) {
@@ -3309,10 +3492,13 @@ function endPan(event) {
   if (!panState.active || event.pointerId !== panState.pointerId) {
     return;
   }
-  const surface = event.currentTarget;
-  surface.releasePointerCapture(event.pointerId);
+  const surface = panState.surface || event.currentTarget;
+  if (surface instanceof Element && surface.hasPointerCapture?.(event.pointerId)) {
+    surface.releasePointerCapture(event.pointerId);
+  }
   panState.active = false;
   panState.pointerId = null;
+  panState.surface = null;
 }
 
 function suppressSwipeClicks(event) {

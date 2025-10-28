@@ -55,6 +55,10 @@ body {
   user-select: none;
 }
 
+#app-root {
+  width: 100%;
+}
+
 body.is-zoomed {
   overflow: hidden;
   --menu-translate: -100%;

@@ -1487,7 +1487,11 @@ function renderSlides() {
   const definitions = buildSlideDefinitions({ orientation, isCompact });
   state.slideDefinitions = definitions;
 
-  const pageTrack = document.querySelector('.page-track');
+  const pageTrack = state.dom?.pageTrack || document.querySelector('.page-track');
+  if (!pageTrack) {
+    console.error('Sivunäkymän säiliötä ei löytynyt, ei voida piirtää sivuja.');
+    return;
+  }
   pageTrack.innerHTML = '';
 
   const slides = definitions.map(pages => createSlide(pages));

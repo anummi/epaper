@@ -747,7 +747,13 @@ function attachGlobalListeners() {
   
   allPagesClose?.addEventListener('click', () => toggleAllPages(false));
   allPages?.addEventListener('click', event => {
-    if (event.target === allPages) {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const isPage = target.closest('.all-pages__page');
+    const isHeader = target.closest('.all-pages__header');
+    if (!isPage && !isHeader) {
       toggleAllPages(false);
     }
   });
@@ -1208,6 +1214,9 @@ function createSlide(pages) {
   if (shouldOffsetFirstPage) {
     surface.classList.add('page-surface--offset');
   }
+
+  const pageMultiplier = shouldOffsetFirstPage ? pages.length + 0.5 : pages.length;
+  surface.style.setProperty('--page-count', String(pageMultiplier));
 
   pages.forEach(pageIndex => {
     const wrapper = document.createElement('div');

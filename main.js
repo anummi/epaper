@@ -2030,18 +2030,12 @@ function createAdsPanelCard({ id, ad, pageIndex }) {
     card.appendChild(fallback);
   }
 
-  const detailsSection = createAdDetailsSection(ad);
   const actions = createAdActionsContainer(id, ad);
 
-  if (detailsSection || actions) {
+  if (actions) {
     const overlay = document.createElement('div');
     overlay.className = 'ads-card__overlay';
-    if (detailsSection) {
-      overlay.appendChild(detailsSection);
-    }
-    if (actions) {
-      overlay.appendChild(actions);
-    }
+    overlay.appendChild(actions);
     card.appendChild(overlay);
   }
 

@@ -292,18 +292,6 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   object-fit: contain;
 }
 
-.page-surface--offset {
-  justify-content: flex-end;
-}
-
-.page-surface--offset::before {
-  content: '';
-  display: block;
-  flex: 0 0 clamp(2rem, 18vw, 14rem);
-  height: 100%;
-  pointer-events: none;
-}
-
 .page-image {
   position: relative;
   flex: 1 1 0;
@@ -625,18 +613,6 @@ body.theme-dark .all-pages {
   height: var(--preview-height);
   overflow: hidden;
   background: #f8f9fb;
-}
-
-.all-pages__preview--offset {
-  justify-content: flex-end;
-}
-
-.all-pages__preview--offset::before {
-  content: '';
-  display: block;
-  flex: 0 0 max(20px, calc(var(--preview-height) * var(--page-ratio) * 0.4));
-  height: 100%;
-  pointer-events: none;
 }
 
 .all-pages__preview img {

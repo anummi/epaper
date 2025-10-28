@@ -929,12 +929,8 @@ body.theme-dark .reading-backdrop {
 }
 
 .ads-panel__grid {
-  --ads-grid-row-height: 12px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  grid-auto-rows: var(--ads-grid-row-height);
-  grid-auto-flow: dense;
-  gap: clamp(1rem, 2.5vw, 1.5rem);
+  column-width: min(320px, 100%);
+  column-gap: clamp(1rem, 2.5vw, 1.5rem);
   margin: 0;
   padding: 0;
   width: 100%;
@@ -942,7 +938,7 @@ body.theme-dark .reading-backdrop {
 
 @media (max-width: 640px) {
   .ads-panel__grid {
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    column-width: min(260px, 100%);
   }
 }
 
@@ -958,6 +954,8 @@ body.theme-dark .reading-backdrop {
   transition: transform var(--transition), box-shadow var(--transition);
   cursor: pointer;
   break-inside: avoid;
+  width: 100%;
+  margin: 0 0 clamp(1rem, 2.5vw, 1.5rem);
 }
 
 .ads-card:hover,
@@ -1261,10 +1259,9 @@ body.theme-dark .reading-backdrop {
 }
 
 .ads-card__media img {
-  max-width: 100%;
-  height: auto;
-  width: auto;
   display: block;
+  width: 100%;
+  height: auto;
   margin-inline: auto;
   border-radius: 0.75rem;
   box-shadow: var(--shadow);

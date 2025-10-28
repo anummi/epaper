@@ -211,6 +211,54 @@ function resolveAdUrl(value) {
   return `https://${trimmed}`;
 }
 
+function normalizeHomePageUrl(value) {
+  if (!value && value !== 0) {
+    return null;
+  }
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.startsWith('//')) {
+    const protocol = typeof window !== 'undefined' && window?.location?.protocol
+      ? window.location.protocol
+      : 'https:';
+    return `${protocol}${trimmed}`;
+  }
+  if (trimmed.startsWith('/')) {
+    return trimmed;
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
+function getDefaultHomePageUrl() {
+  if (typeof window === 'undefined') {
+    return '/';
+  }
+  const { location } = window;
+  if (!location) {
+    return '/';
+  }
+  if (location.origin && location.origin !== 'null') {
+    return location.origin;
+  }
+  if (location.protocol && location.host) {
+    return `${location.protocol}//${location.host}`;
+  }
+  return '/';
+}
+
+function getHomePageUrl() {
+  const override = normalizeHomePageUrl(state.config?.homePageUrl);
+  if (override) {
+    return override;
+  }
+  return getDefaultHomePageUrl();
+}
+
 function normalizePhoneNumber(value) {
   if (!value) {
     return null;
@@ -285,6 +333,43 @@ function createAdActionElement({ key, href = null, target = '_self', rel = null,
     });
   }
   return element;
+}
+
+function isPlainLeftClick(event) {
+  if (!event) {
+    return false;
+  }
+  if (event.button !== undefined && event.button !== 0) {
+    return false;
+  }
+  return !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey);
+}
+
+function openUrlInTarget(url, target = '_self') {
+  if (!url) {
+    return false;
+  }
+  try {
+    if (target === '_self') {
+      window.location.assign(url);
+      return true;
+    }
+    const features = target === '_blank' ? 'noopener,noreferrer' : undefined;
+    const newWindow = window.open(url, target, features);
+    if (newWindow) {
+      try {
+        if (target === '_blank') {
+          newWindow.opener = null;
+        }
+      } catch (error) {
+        console.warn('Ikkunan avaaminen ilman viittausta epäonnistui:', error);
+      }
+      return true;
+    }
+  } catch (error) {
+    console.warn('Linkin avaaminen epäonnistui:', error);
+  }
+  return false;
 }
 
 function loadStoredSettings() {
@@ -891,8 +976,24 @@ function handleNavigationAction(action) {
     case 'settings':
       openSettingsPanel();
       break;
+    case 'home-page':
+      navigateToHomePage();
+      break;
     default:
       break;
+  }
+}
+
+function navigateToHomePage() {
+  const url = getHomePageUrl();
+  if (!url) {
+    return;
+  }
+  try {
+    window.location.assign(url);
+  } catch (error) {
+    console.warn('Kotisivulle siirtyminen epäonnistui:', error);
+    window.location.href = url;
   }
 }
 
@@ -1604,9 +1705,18 @@ function createAdHotspot(pageIndex, mapItem, ad) {
     const websiteButton = createAdActionElement({
       key: 'openLink',
       href: website,
-      target: '_blank'
+      target: '_blank',
+      onClick: event => {
+        deactivateAdHotspot(hotspot);
+        if (!isPlainLeftClick(event)) {
+          return;
+        }
+        event.preventDefault();
+        if (!openUrlInTarget(website, '_blank')) {
+          window.location.href = website;
+        }
+      }
     });
-    websiteButton.addEventListener('click', () => deactivateAdHotspot(hotspot));
     buttons.push(websiteButton);
   }
 
@@ -1626,9 +1736,18 @@ function createAdHotspot(pageIndex, mapItem, ad) {
     const navigateButton = createAdActionElement({
       key: 'navigate',
       href: mapsUrl,
-      target: '_blank'
+      target: '_blank',
+      onClick: event => {
+        deactivateAdHotspot(hotspot);
+        if (!isPlainLeftClick(event)) {
+          return;
+        }
+        event.preventDefault();
+        if (!openUrlInTarget(mapsUrl, '_blank')) {
+          window.location.href = mapsUrl;
+        }
+      }
     });
-    navigateButton.addEventListener('click', () => deactivateAdHotspot(hotspot));
     buttons.push(navigateButton);
   }
 

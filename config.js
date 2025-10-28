@@ -22,7 +22,10 @@ window.epaperConfig = {
     closeArchive: { fi: 'Sulje arkisto', en: 'Close archive' },
     closeArticle: { fi: 'Sulje artikkeli', en: 'Close article' },
     articleLoading: { fi: 'Ladataan sisältöä…', en: 'Loading article…' },
-    articleError: { fi: 'Artikkelin lataaminen epäonnistui.', en: 'Failed to load the article.' }
+    articleError: { fi: 'Artikkelin lataaminen epäonnistui.', en: 'Failed to load the article.' },
+    readingWindowTitle: { fi: 'Lukuikkuna', en: 'Reading window' },
+    prevArticle: { fi: 'Edellinen juttu', en: 'Previous article' },
+    nextArticle: { fi: 'Seuraava juttu', en: 'Next article' }
   },
   navigation: [
     {

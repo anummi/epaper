@@ -262,8 +262,19 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   transform-origin: center center;
   transition: transform 120ms ease-out;
   touch-action: none;
+  --page-count: 1;
+  --spread-ratio: calc(var(--page-ratio, 0.75) * var(--page-count, 1));
+  width: min(
+    calc(100vw - (2 * var(--stage-padding-inline))),
+    calc((100vh - (2 * var(--stage-padding-block))) * var(--spread-ratio))
+  );
+  height: min(
+    calc(100vh - (2 * var(--stage-padding-block))),
+    calc((100vw - (2 * var(--stage-padding-inline))) / var(--spread-ratio))
+  );
+  aspect-ratio: var(--spread-ratio);
   max-height: calc(100vh - (2 * var(--stage-padding-block)));
-  height: min(calc(100vh - (2 * var(--stage-padding-block))), 100%);
+  max-width: calc(100vw - (2 * var(--stage-padding-inline)));
 }
 
 .page-surface.is-zoomed {
@@ -276,9 +287,9 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
 
 .page-surface img {
   display: block;
-  max-width: none;
+  width: 100%;
   height: 100%;
-  width: auto;
+  object-fit: contain;
 }
 
 .page-surface--offset {
@@ -295,7 +306,8 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
 
 .page-image {
   position: relative;
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   align-items: stretch;
   overflow: hidden;

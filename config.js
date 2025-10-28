@@ -13,6 +13,9 @@ window.epaperConfig = {
     settingsClose: { fi: 'Sulje asetukset', en: 'Close settings' },
     settingsLanguage: { fi: 'Kieli', en: 'Language' },
     settingsDarkMode: { fi: 'Tumma tila', en: 'Dark mode' },
+    adsTitle: { fi: 'Mainokset', en: 'Advertisements' },
+    closeAds: { fi: 'Sulje mainokset', en: 'Close advertisements' },
+    adsEmpty: { fi: 'Lehdessä ei ole mainoksia.', en: 'This issue does not contain advertisements.' },
     fullscreenLabel: { fi: 'Koko näyttö', en: 'Enter fullscreen' },
     windowedLabel: { fi: 'Sulje koko näyttö', en: 'Exit fullscreen' },
     prevPage: { fi: 'Edellinen sivu', en: 'Previous page' },
@@ -72,6 +75,15 @@ window.epaperConfig = {
       icon: {
         viewBox: '0 0 576 512',
         path: 'M288 221L78.8 128 288 35l209.2 93L288 221zM536.6 110.5L288 0 39.4 110.5 0 128l39.4 17.5L288 256 536.6 145.5 576 128l-39.4-17.5zM144 227l-39.4-17.5-65.2 29L0 256l39.4 17.5L288 384 536.6 273.5 576 256l-39.4-17.5-65.2-29L432 227l65.2 29L288 349 78.8 256 144 227zM104.6 337.5l-65.2 29L0 384l39.4 17.5L288 512 536.6 401.5 576 384l-39.4-17.5-65.2-29L432 355l65.2 29L288 477 78.8 384 144 355l-39.4-17.5z'
+      }
+    },
+    {
+      action: 'ads',
+      className: 'menu-ads',
+      label: { fi: 'Mainokset', en: 'Ads' },
+      icon: {
+        viewBox: '0 0 640 640',
+        path: 'M128 176C119.2 176 112 183.2 112 192L112 448C112 456.8 119.2 464 128 464L512 464C520.8 464 528 456.8 528 448L528 192C528 183.2 520.8 176 512 176L128 176zM64 192C64 156.7 92.7 128 128 128L512 128C547.3 128 576 156.7 576 192L576 448C576 483.3 547.3 512 512 512L128 512C92.7 512 64 483.3 64 448L64 192zM208 288L208 320L256 320L256 288C256 279.2 248.8 272 240 272L224 272C215.2 272 208 279.2 208 288zM256 392L256 368L208 368L208 392C208 405.3 197.3 416 184 416C170.7 416 160 405.3 160 392L160 288C160 252.7 188.7 224 224 224L240 224C275.3 224 304 252.7 304 288L304 392C304 405.3 293.3 416 280 416C266.7 416 256 405.3 256 392zM480 248L480 392C480 405.3 469.3 416 456 416C448.9 416 442.5 412.9 438.1 408C427.9 413.1 416.3 416 404 416C362 416 328 382 328 340C328 298 362 264 404 264C413.9 264 423.3 265.9 432 269.3L432 248C432 234.7 442.7 224 456 224C469.3 224 480 234.7 480 248zM404 312C388.5 312 376 324.5 376 340C376 355.5 388.5 368 404 368C419.5 368 432 355.5 432 340C432 324.5 419.5 312 404 312z'
       }
     },
     {

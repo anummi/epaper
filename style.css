@@ -606,7 +606,7 @@ body.theme-dark .all-pages {
     border-radius: 0.5rem;
 }
 
-.all-pages__grid button:last-child {
+.all-pages__grid button:last-child:not(.all-pages__page--spread) {
     width: var(--preview-width);
 }
 

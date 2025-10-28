@@ -16,6 +16,7 @@ const state = {
   pageMaps: [],
   pageArticles: [],
   articleLookup: new Map(),
+  articlePageLookup: new Map(),
   archiveItems: [],
   archiveLoaded: false,
   currentIssuePath: null,
@@ -566,6 +567,7 @@ function applyIssue(issue, options = {}) {
   state.pageMaps = Array.isArray(issue.pageMaps) ? issue.pageMaps : [];
   state.pageArticles = Array.isArray(issue.pageArticles) ? issue.pageArticles : [];
   state.articleLookup = new Map(state.pageArticles.map(article => [String(article.id), article]));
+  state.articlePageLookup = buildArticlePageLookup(state.pageMaps);
   state.articleOrder = state.pageArticles
     .map(article => String(article.id))
     .filter(id => Boolean(id));
@@ -593,6 +595,28 @@ function applyIssue(issue, options = {}) {
     ? `${issue.label} – ${state.config.paper}`
     : state.config.paper;
   updateReadingNavigation();
+}
+
+function buildArticlePageLookup(pageMaps) {
+  const lookup = new Map();
+  if (!Array.isArray(pageMaps)) {
+    return lookup;
+  }
+  pageMaps.forEach((items, pageIndex) => {
+    if (!Array.isArray(items)) {
+      return;
+    }
+    items.forEach(item => {
+      if (!item || item.t !== 0 || item.id == null) {
+        return;
+      }
+      const id = String(item.id);
+      if (!lookup.has(id)) {
+        lookup.set(id, pageIndex);
+      }
+    });
+  });
+  return lookup;
 }
 
 function buildNavigation() {
@@ -929,6 +953,30 @@ function gotoAdjacentArticle(step) {
   }
 }
 
+function focusPageForArticle(articleId, options = {}) {
+  const id = String(articleId);
+  const pageIndex = state.articlePageLookup.get(id);
+  if (!Number.isInteger(pageIndex)) {
+    return;
+  }
+  const slideIndex = state.slideDefinitions.findIndex(def => def.includes(pageIndex));
+  if (slideIndex === -1) {
+    return;
+  }
+  if (slideIndex === state.currentSlide) {
+    if (state.activePageIndex !== pageIndex) {
+      state.activePageIndex = pageIndex;
+      updateLocation();
+    }
+    return;
+  }
+  updateActiveSlide(slideIndex, {
+    preserveZoom: false,
+    keepReadingOpen: Boolean(options.keepReadingOpen),
+    activePageIndex: pageIndex
+  });
+}
+
 function openArticleById(articleId) {
   if (!articleId) {
     return;
@@ -939,6 +987,7 @@ function openArticleById(articleId) {
     console.warn('Artikkelia ei löytynyt arkistosta:', articleId);
     return;
   }
+  focusPageForArticle(id, { keepReadingOpen: true });
   const heading = state.dom.readingTitle;
   if (heading) {
     heading.textContent = article.hl || resolveLabel('readingTitle', 'Artikkeli');
@@ -1158,10 +1207,6 @@ function createSlide(pages) {
     && state.imagePaths.length > 1;
   if (shouldOffsetFirstPage) {
     surface.classList.add('page-surface--offset');
-    const placeholder = document.createElement('div');
-    placeholder.className = 'page-image page-image--empty';
-    placeholder.setAttribute('aria-hidden', 'true');
-    surface.appendChild(placeholder);
   }
 
   pages.forEach(pageIndex => {
@@ -1281,7 +1326,11 @@ function gotoSlide(index) {
 }
 
 function updateActiveSlide(index, options = {}) {
-  const { preserveZoom = false } = options;
+  const {
+    preserveZoom = false,
+    keepReadingOpen = false,
+    activePageIndex = null
+  } = options;
   if (state.currentSlide != null && state.slides[state.currentSlide]) {
     state.slides[state.currentSlide].element.classList.remove('is-active');
   }
@@ -1292,8 +1341,13 @@ function updateActiveSlide(index, options = {}) {
     return;
   }
   current.element.classList.add('is-active');
-  state.activePageIndex = current.pages[0];
-  closeReadingWindow();
+  const nextActivePageIndex = Number.isInteger(activePageIndex)
+    ? activePageIndex
+    : current.pages[0];
+  state.activePageIndex = nextActivePageIndex;
+  if (!keepReadingOpen) {
+    closeReadingWindow();
+  }
 
   if (!preserveZoom) {
     resetZoom();
@@ -1590,7 +1644,7 @@ function buildAllPagesGrid() {
     button.className = 'all-pages__page';
     button.dataset.pages = pages.join(',');
     const shouldOffsetFirstPage = pages.length === 1 && pages[0] === 0 && state.imagePaths.length > 1;
-    const sizingCount = shouldOffsetFirstPage ? pages.length + 1 : pages.length;
+    const sizingCount = shouldOffsetFirstPage ? pages.length + 0.5 : pages.length;
     button.dataset.pageCount = String(sizingCount);
     if (pages.length > 1) {
       button.classList.add('all-pages__page--spread');
@@ -1600,10 +1654,7 @@ function buildAllPagesGrid() {
     preview.className = 'all-pages__preview';
     preview.style.setProperty('--page-ratio', String(safeRatio));
     if (shouldOffsetFirstPage) {
-      const placeholder = document.createElement('div');
-      placeholder.className = 'all-pages__placeholder';
-      placeholder.setAttribute('aria-hidden', 'true');
-      preview.appendChild(placeholder);
+      preview.classList.add('all-pages__preview--offset');
     }
     pages.forEach(pageIndex => {
       const img = document.createElement('img');
@@ -1766,7 +1817,7 @@ function updateAllPagesSizing() {
 
   const buttons = grid.querySelectorAll('.all-pages__page');
   buttons.forEach(button => {
-    const pageCount = Number.parseInt(button.dataset.pageCount || '1', 10) || 1;
+    const pageCount = Number.parseFloat(button.dataset.pageCount || '1') || 1;
     const width = Math.max(targetHeight * safeRatio * pageCount, 120);
     button.style.setProperty('--preview-width', `${Math.round(width)}px`);
   });

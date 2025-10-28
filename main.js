@@ -1437,17 +1437,7 @@ function createSlide(pages) {
   const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 0.75;
   surface.style.setProperty('--page-ratio', String(safeRatio));
 
-  const shouldOffsetFirstPage = pages.length === 1
-    && pages[0] === 0
-    && state.orientation === 'landscape'
-    && !state.isCompact
-    && state.imagePaths.length > 1;
-  if (shouldOffsetFirstPage) {
-    surface.classList.add('page-surface--offset');
-  }
-
-  const pageMultiplier = shouldOffsetFirstPage ? pages.length + 0.5 : pages.length;
-  surface.style.setProperty('--page-count', String(pageMultiplier));
+  surface.style.setProperty('--page-count', String(pages.length));
 
   pages.forEach(pageIndex => {
     const wrapper = document.createElement('div');
@@ -1660,7 +1650,7 @@ function createAdHotspot(pageIndex, mapItem, ad) {
   hotspot.addEventListener('pointerenter', () => activateAdHotspot(hotspot));
   hotspot.addEventListener('pointerleave', () => deactivateAdHotspot(hotspot));
   hotspot.addEventListener('click', event => {
-    if (event.target.closest('.ad-action')) {
+    if (event.target.closest('.ad-hotspot__actions')) {
       return;
     }
     event.preventDefault();
@@ -1671,6 +1661,9 @@ function createAdHotspot(pageIndex, mapItem, ad) {
     }
   });
   hotspot.addEventListener('keydown', event => {
+    if (event.target !== hotspot) {
+      return;
+    }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       if (hotspot.classList.contains('is-active')) {
@@ -2192,9 +2185,7 @@ function buildAllPagesGrid() {
     button.type = 'button';
     button.className = 'all-pages__page';
     button.dataset.pages = pages.join(',');
-    const shouldOffsetFirstPage = pages.length === 1 && pages[0] === 0 && state.imagePaths.length > 1;
-    const sizingCount = shouldOffsetFirstPage ? pages.length + 0.5 : pages.length;
-    button.dataset.pageCount = String(sizingCount);
+    button.dataset.pageCount = String(pages.length);
     if (pages.length > 1) {
       button.classList.add('all-pages__page--spread');
     }
@@ -2202,9 +2193,6 @@ function buildAllPagesGrid() {
     const preview = document.createElement('div');
     preview.className = 'all-pages__preview';
     preview.style.setProperty('--page-ratio', String(safeRatio));
-    if (shouldOffsetFirstPage) {
-      preview.classList.add('all-pages__preview--offset');
-    }
     pages.forEach(pageIndex => {
       const img = document.createElement('img');
       img.src = state.imagePaths[pageIndex];

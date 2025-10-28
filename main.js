@@ -12,6 +12,7 @@ const SUPPORTED_LANGUAGES = {
   fi: 'fi-FI',
   en: 'en-US'
 };
+const DEFAULT_ADS_PANEL_GUTTER = 16;
 
 const AD_ACTION_FALLBACKS = {
   openLink: 'Avaa verkkosivusto',
@@ -101,7 +102,7 @@ const swipeState = {
   isSwipe: false
 };
 
-let adsResizeObserver = null;
+let adsMasonryInstance = null;
 
 function normalizeLanguage(value) {
   if (!value) {
@@ -1135,31 +1136,21 @@ function updateLocation() {
 
 document.addEventListener('DOMContentLoaded', init);
 document.addEventListener('DOMContentLoaded', () => {
-  const grid = document.querySelector('.ads-panel__grid');
-  if (!grid) return;
+  const panel = document.querySelector('.ads-panel');
+  if (!panel) {
+    return;
+  }
 
-  const initMasonry = () => {
-    imagesLoaded(grid, function() {
-      new Masonry(grid, {
-        itemSelector: '.ads-card',
-        percentPosition: true,
-        gutter: 10
-      });
-    });
+  const ensureLayout = () => {
+    if (panel.classList.contains('is-open')) {
+      refreshAdsPanelLayout();
+    }
   };
 
-  // jos modaalilla on luokka "is-open" tai se vaihtuu dynaamisesti:
-  const panel = document.querySelector('.ads-panel');
-  if (panel && panel.classList.contains('is-open')) {
-    initMasonry();
-  } else if (panel) {
-    const observer = new MutationObserver(() => {
-      if (panel.classList.contains('is-open')) {
-        initMasonry();
-      }
-    });
-    observer.observe(panel, { attributes: true, attributeFilter: ['class'] });
-  }
+  ensureLayout();
+
+  const observer = new MutationObserver(ensureLayout);
+  observer.observe(panel, { attributes: true, attributeFilter: ['class'] });
 });
 
 async function init() {
@@ -1815,6 +1806,84 @@ function closeArchivePanel() {
   panel.setAttribute('aria-hidden', 'true');
 }
 
+function getAdsPanelGrid() {
+  return state.dom?.adsGrid || document.querySelector('.ads-panel__grid');
+}
+
+function getAdsPanelGutter(grid) {
+  const firstCard = grid?.querySelector?.('.ads-card');
+  if (!firstCard) {
+    return DEFAULT_ADS_PANEL_GUTTER;
+  }
+  const styles = window.getComputedStyle(firstCard);
+  const marginBottom = Number.parseFloat(styles.marginBottom);
+  if (Number.isFinite(marginBottom) && marginBottom > 0) {
+    return marginBottom;
+  }
+  return DEFAULT_ADS_PANEL_GUTTER;
+}
+
+function destroyAdsPanelLayout() {
+  if (adsMasonryInstance) {
+    adsMasonryInstance.destroy();
+    adsMasonryInstance = null;
+  }
+}
+
+function requestAdsPanelLayout() {
+  if (!adsMasonryInstance) {
+    return;
+  }
+  requestAnimationFrame(() => {
+    if (adsMasonryInstance) {
+      adsMasonryInstance.layout();
+    }
+  });
+}
+
+function refreshAdsPanelLayout() {
+  const grid = getAdsPanelGrid();
+  if (!grid) {
+    return;
+  }
+  const cards = grid.querySelectorAll('.ads-card');
+  if (!cards.length) {
+    destroyAdsPanelLayout();
+    return;
+  }
+
+  const gutter = getAdsPanelGutter(grid);
+  const rawGutter = adsMasonryInstance?.options?.gutter;
+  const currentGutter = typeof rawGutter === 'number' && Number.isFinite(rawGutter)
+    ? rawGutter
+    : null;
+  if (adsMasonryInstance && currentGutter !== null && Math.abs(currentGutter - gutter) > 0.5) {
+    adsMasonryInstance.destroy();
+    adsMasonryInstance = null;
+  }
+
+  let createdInstance = false;
+
+  if (!adsMasonryInstance) {
+    adsMasonryInstance = new Masonry(grid, {
+      itemSelector: '.ads-card',
+      percentPosition: true,
+      gutter
+    });
+    createdInstance = true;
+  } else {
+    adsMasonryInstance.options.gutter = gutter;
+    adsMasonryInstance.gutter = gutter;
+    adsMasonryInstance.reloadItems();
+  }
+
+  requestAdsPanelLayout();
+
+  if (createdInstance && typeof imagesLoaded === 'function') {
+    imagesLoaded(grid, () => requestAdsPanelLayout());
+  }
+}
+
 function openAdsPanel() {
   const { adsPanel, adsClose } = state.dom;
   if (!adsPanel) {
@@ -1828,8 +1897,8 @@ function openAdsPanel() {
   adsPanel.classList.add('is-open');
   adsPanel.setAttribute('aria-hidden', 'false');
   document.body.classList.add('ads-open');
+  requestAdsPanelLayout();
   requestAnimationFrame(() => {
-    sizeAdsPanelItems();
     adsClose?.focus({ preventScroll: true });
   });
 }
@@ -1842,7 +1911,7 @@ function closeAdsPanel() {
   panel.classList.remove('is-open');
   panel.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('ads-open');
-  disconnectAdsResizeObserver();
+  destroyAdsPanelLayout();
 }
 
 function isAdsPanelOpen() {
@@ -1892,7 +1961,7 @@ function handleResize() {
       applyZoom(surface);
     }
     updateAllPagesSizing();
-    sizeAdsPanelItems();
+    refreshAdsPanelLayout();
   }, 180);
 }
 
@@ -1931,70 +2000,13 @@ function collectAdsInOrder() {
   return ads;
 }
 
-function disconnectAdsResizeObserver() {
-  if (adsResizeObserver) {
-    adsResizeObserver.disconnect();
-  }
-}
-
-function ensureAdsResizeObserver() {
-  if (adsResizeObserver || typeof ResizeObserver === 'undefined') {
-    return adsResizeObserver;
-  }
-  adsResizeObserver = new ResizeObserver(entries => {
-    if (!Array.isArray(entries) || !entries.length) {
-      return;
-    }
-    const metrics = getAdsGridMetrics();
-    if (!metrics) {
-      return;
-    }
-    entries.forEach(entry => {
-      const target = entry?.target;
-      if (target instanceof HTMLElement) {
-        updateAdsCardSpan(target, metrics);
-      }
-    });
-  });
-  return adsResizeObserver;
-}
-
-function getAdsGridMetrics() {
-  const grid = state.dom.adsGrid;
-  if (!grid) {
-    return null;
-  }
-  const styles = window.getComputedStyle(grid);
-  if (styles.display !== 'grid') {
-    return null;
-  }
-  const rowHeight = Number.parseFloat(styles.getPropertyValue('--ads-grid-row-height')) || 12;
-  const gapValue = styles.rowGap || styles.getPropertyValue('grid-row-gap') || styles.gap || '0';
-  const rowGap = Number.parseFloat(gapValue) || 0;
-  return { grid, rowHeight, rowGap };
-}
-
-function updateAdsCardSpan(card, metrics = getAdsGridMetrics()) {
-  if (!(card instanceof HTMLElement) || !metrics) {
-    return;
-  }
-  const { rowHeight, rowGap } = metrics;
-  const rect = card.getBoundingClientRect();
-  const totalHeight = rect?.height || 0;
-  if (!(totalHeight > 0)) {
-    return;
-  }
-  const span = Math.max(Math.ceil((totalHeight + rowGap) / (rowHeight + rowGap)), 1);
-  card.style.gridRowEnd = `span ${span}`;
-}
-
 function buildAdsPanelContent() {
-  const grid = state.dom.adsGrid;
+  const grid = getAdsPanelGrid();
   const emptyMessage = state.dom.adsEmpty;
   if (!grid) {
     return;
   }
-  disconnectAdsResizeObserver();
+  destroyAdsPanelLayout();
   grid.innerHTML = '';
   const ads = collectAdsInOrder();
   if (!ads.length) {
@@ -2016,11 +2028,7 @@ function buildAdsPanelContent() {
     }
   });
   grid.appendChild(fragment);
-  const observer = ensureAdsResizeObserver();
-  if (observer) {
-    grid.querySelectorAll('.ads-card').forEach(card => observer.observe(card));
-  }
-  requestAnimationFrame(() => sizeAdsPanelItems());
+  refreshAdsPanelLayout();
 }
 
 function createAdsPanelCard({ id, ad, pageIndex }) {
@@ -2061,7 +2069,7 @@ function createAdsPanelCard({ id, ad, pageIndex }) {
   mediaFigure.className = 'ads-card__media';
   const image = createAdImageElement(id, ad, {
     loading: 'lazy',
-    onLoad: () => sizeAdsPanelItems()
+    onLoad: () => requestAdsPanelLayout()
   });
   if (image) {
     mediaFigure.appendChild(image);
@@ -2105,24 +2113,6 @@ function createAdsPanelCard({ id, ad, pageIndex }) {
   });
 
   return card;
-}
-
-function sizeAdsPanelItems() {
-  const grid = state.dom.adsGrid;
-  if (!grid) {
-    return;
-  }
-  const cards = grid.querySelectorAll('.ads-card');
-  if (!cards.length) {
-    return;
-  }
-  requestAnimationFrame(() => {
-    const metrics = getAdsGridMetrics();
-    if (!metrics) {
-      return;
-    }
-    cards.forEach(card => updateAdsCardSpan(card, metrics));
-  });
 }
 
 function bindAudioElementEvents(audio) {

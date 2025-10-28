@@ -589,26 +589,37 @@ async function init() {
     return;
   }
 
-  buildLayout();
-  document.body.classList.add('menu-collapsed');
-
-  const storedSettings = loadStoredSettings();
-  const configLanguage = normalizeLanguage(state.config.lang) || 'fi';
-  state.settings.language = normalizeLanguage(storedSettings.language) || configLanguage;
-  state.settings.darkMode = typeof storedSettings.darkMode === 'boolean' ? storedSettings.darkMode : false;
-
-  applySettings({ persist: false });
-  attachGlobalListeners();
-
-  const initialLocation = parseInitialLocation();
-
+  console.groupCollapsed('init');
   try {
-    const issue = await loadIssueData(state.config, initialLocation.issuePath);
-    applyIssue(issue, { targetPageIndex: initialLocation.pageIndex });
-  } catch (error) {
-    console.error('Näköislehden lataaminen epäonnistui:', error);
+    console.info('Käynnistetään näköislehden sovellus', {
+      paper: state.config.paper,
+      id: state.config.id,
+      lang: state.config.lang
+    });
+
+    buildLayout();
+    document.body.classList.add('menu-collapsed');
+
+    const storedSettings = loadStoredSettings();
+    const configLanguage = normalizeLanguage(state.config.lang) || 'fi';
+    state.settings.language = normalizeLanguage(storedSettings.language) || configLanguage;
+    state.settings.darkMode = typeof storedSettings.darkMode === 'boolean' ? storedSettings.darkMode : false;
+
+    applySettings({ persist: false });
+    attachGlobalListeners();
+
+    const initialLocation = parseInitialLocation();
+    console.info('Alustava sijainti URL-parametreista', initialLocation);
+
+    try {
+      const issue = await loadIssueData(state.config, initialLocation.issuePath);
+      applyIssue(issue, { targetPageIndex: initialLocation.pageIndex });
+    } catch (error) {
+      console.error('Näköislehden lataaminen epäonnistui:', error);
+    }
   } finally {
     requestAnimationFrame(() => document.body.classList.add('menu-animated'));
+    console.groupEnd?.();
   }
 }
 
@@ -634,19 +645,33 @@ function applyIssue(issue, options = {}) {
   }
   state.activePageIndex = targetPageIndex;
 
-  toggleAllPages(false);
-  closeArchivePanel();
-  closeReadingWindow();
-  closeSettingsPanel();
-  buildAllPagesGrid();
-  renderSlides();
-  updateNavButtons();
-  buildArchiveList();
-  updateAllPagesSizing();
-  updateLocation();
-  document.title = issue.label
-    ? `${issue.label} – ${state.config.paper}`
-    : state.config.paper;
+  console.groupCollapsed('applyIssue');
+  try {
+    console.info('Aktiivinen numero asetettu', {
+      path: state.currentIssuePath,
+      label: issue.label,
+      pages: state.imagePaths.length,
+      pageMaps: state.pageMaps.length,
+      articles: state.pageArticles.length,
+      targetPageIndex
+    });
+
+    toggleAllPages(false);
+    closeArchivePanel();
+    closeReadingWindow();
+    closeSettingsPanel();
+    buildAllPagesGrid();
+    renderSlides();
+    updateNavButtons();
+    buildArchiveList();
+    updateAllPagesSizing();
+    updateLocation();
+    document.title = issue.label
+      ? `${issue.label} – ${state.config.paper}`
+      : state.config.paper;
+  } finally {
+    console.groupEnd?.();
+  }
 }
 
 function buildNavigation() {
@@ -1422,53 +1447,77 @@ async function loadIssueData(config, issuePath) {
     : null;
   const normalizedTargetPath = issuePath ? normalizeArchivePath(issuePath) : null;
 
-  if (!archiveData) {
-    const archiveUrl = `${rootPath}/${config.paper}_arch.htm`;
-    const archiveResponse = await fetch(archiveUrl);
-    if (!archiveResponse.ok) {
-      throw new Error(`Arkistotiedoston lataus epäonnistui: ${archiveResponse.status}`);
+  console.groupCollapsed('loadIssueData');
+  try {
+    console.info('Ladataan näköislehden data', {
+      rootPath,
+      paper: config.paper,
+      requestedIssuePath: issuePath,
+      normalizedTargetPath
+    });
+
+    if (!archiveData) {
+      const archiveUrl = `${rootPath}/${config.paper}_arch.htm`;
+      console.info('Haetaan arkistodata', archiveUrl);
+      const archiveResponse = await fetch(archiveUrl);
+      if (!archiveResponse.ok) {
+        throw new Error(`Arkistotiedoston lataus epäonnistui: ${archiveResponse.status}`);
+      }
+      const parsed = await archiveResponse.json();
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        throw new Error('Arkistodata on tyhjä.');
+      }
+      archiveData = parsed;
+      console.info('Arkistodata ladattu', { entries: archiveData.length });
+    } else {
+      console.info('Käytetään välimuistissa olevaa arkistodataa', { entries: archiveData.length });
     }
-    const parsed = await archiveResponse.json();
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      throw new Error('Arkistodata on tyhjä.');
+
+    state.archiveLoaded = true;
+
+    const selectedEntry = normalizedTargetPath
+      ? archiveData.find(entry => normalizeArchivePath(entry.p) === normalizedTargetPath)
+      : archiveData[0];
+
+    if (!selectedEntry) {
+      throw new Error('Lehden polkua ei löytynyt arkistosta.');
     }
-    archiveData = parsed;
+
+    const issueUrl = `${rootPath}/${selectedEntry.p}${config.paper}_cont.htm`;
+    console.info('Haetaan numeron data', issueUrl);
+    const issueResponse = await fetch(issueUrl);
+    if (!issueResponse.ok) {
+      throw new Error(`Lehden datan lataus epäonnistui: ${issueResponse.status}`);
+    }
+    const issueData = await issueResponse.json();
+    if (!issueData.pages) {
+      throw new Error('Lehden sivumäärää ei löytynyt.');
+    }
+
+    const imagePaths = Array.from(
+      { length: issueData.pages },
+      (_, index) => `${rootPath}/${selectedEntry.p}p${index + 1}.webp`
+    );
+
+    console.info('Numeron data ladattu', {
+      path: selectedEntry.p,
+      pages: issueData.pages,
+      pageMaps: Array.isArray(issueData.pageMaps) ? issueData.pageMaps.length : 0,
+      pageArticles: Array.isArray(issueData.pageArticles) ? issueData.pageArticles.length : 0
+    });
+
+    return {
+      imagePaths,
+      pageMaps: issueData.pageMaps || [],
+      pageArticles: issueData.pageArticles || [],
+      res: issueData.res,
+      archiveItems: archiveData,
+      path: normalizeArchivePath(selectedEntry.p),
+      label: selectedEntry.d
+    };
+  } finally {
+    console.groupEnd?.();
   }
-
-  state.archiveLoaded = true;
-
-  const selectedEntry = normalizedTargetPath
-    ? archiveData.find(entry => normalizeArchivePath(entry.p) === normalizedTargetPath)
-    : archiveData[0];
-
-  if (!selectedEntry) {
-    throw new Error('Lehden polkua ei löytynyt arkistosta.');
-  }
-
-  const issueUrl = `${rootPath}/${selectedEntry.p}${config.paper}_cont.htm`;
-  const issueResponse = await fetch(issueUrl);
-  if (!issueResponse.ok) {
-    throw new Error(`Lehden datan lataus epäonnistui: ${issueResponse.status}`);
-  }
-  const issueData = await issueResponse.json();
-  if (!issueData.pages) {
-    throw new Error('Lehden sivumäärää ei löytynyt.');
-  }
-
-  const imagePaths = Array.from(
-    { length: issueData.pages },
-    (_, index) => `${rootPath}/${selectedEntry.p}p${index + 1}.webp`
-  );
-
-  return {
-    imagePaths,
-    pageMaps: issueData.pageMaps || [],
-    pageArticles: issueData.pageArticles || [],
-    res: issueData.res,
-    archiveItems: archiveData,
-    path: normalizeArchivePath(selectedEntry.p),
-    label: selectedEntry.d
-  };
 }
 
 function renderSlides() {

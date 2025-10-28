@@ -335,43 +335,6 @@ function createAdActionElement({ key, href = null, target = '_self', rel = null,
   return element;
 }
 
-function isPlainLeftClick(event) {
-  if (!event) {
-    return false;
-  }
-  if (event.button !== undefined && event.button !== 0) {
-    return false;
-  }
-  return !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey);
-}
-
-function openUrlInTarget(url, target = '_self') {
-  if (!url) {
-    return false;
-  }
-  try {
-    if (target === '_self') {
-      window.location.assign(url);
-      return true;
-    }
-    const features = target === '_blank' ? 'noopener,noreferrer' : undefined;
-    const newWindow = window.open(url, target, features);
-    if (newWindow) {
-      try {
-        if (target === '_blank') {
-          newWindow.opener = null;
-        }
-      } catch (error) {
-        console.warn('Ikkunan avaaminen ilman viittausta epäonnistui:', error);
-      }
-      return true;
-    }
-  } catch (error) {
-    console.warn('Linkin avaaminen epäonnistui:', error);
-  }
-  return false;
-}
-
 function loadStoredSettings() {
   try {
     const raw = window.localStorage?.getItem(SETTINGS_STORAGE_KEY);
@@ -608,6 +571,7 @@ function buildLayout() {
 
   state.dom = {
     shell,
+    stage,
     menuContent,
     navPrev,
     navNext,
@@ -1005,6 +969,7 @@ function attachGlobalListeners() {
   state.listenersAttached = true;
 
   const {
+    stage,
     navPrev,
     navNext,
     zoomIn,
@@ -1065,6 +1030,11 @@ function attachGlobalListeners() {
 
   languageSelect?.addEventListener('change', handleLanguageChange);
   darkModeToggle?.addEventListener('change', handleDarkModeChange);
+
+  stage?.addEventListener('pointerdown', handleStagePointerDown);
+  stage?.addEventListener('pointermove', movePan);
+  stage?.addEventListener('pointerup', endPan);
+  stage?.addEventListener('pointercancel', endPan);
 
   document.addEventListener('fullscreenchange', updateFullscreenUI);
   document.addEventListener('keydown', handleKeydown);
@@ -1705,18 +1675,9 @@ function createAdHotspot(pageIndex, mapItem, ad) {
     const websiteButton = createAdActionElement({
       key: 'openLink',
       href: website,
-      target: '_blank',
-      onClick: event => {
-        deactivateAdHotspot(hotspot);
-        if (!isPlainLeftClick(event)) {
-          return;
-        }
-        event.preventDefault();
-        if (!openUrlInTarget(website, '_blank')) {
-          window.location.href = website;
-        }
-      }
+      target: '_blank'
     });
+    websiteButton.addEventListener('click', () => deactivateAdHotspot(hotspot));
     buttons.push(websiteButton);
   }
 
@@ -1736,18 +1697,9 @@ function createAdHotspot(pageIndex, mapItem, ad) {
     const navigateButton = createAdActionElement({
       key: 'navigate',
       href: mapsUrl,
-      target: '_blank',
-      onClick: event => {
-        deactivateAdHotspot(hotspot);
-        if (!isPlainLeftClick(event)) {
-          return;
-        }
-        event.preventDefault();
-        if (!openUrlInTarget(mapsUrl, '_blank')) {
-          window.location.href = mapsUrl;
-        }
-      }
+      target: '_blank'
     });
+    navigateButton.addEventListener('click', () => deactivateAdHotspot(hotspot));
     buttons.push(navigateButton);
   }
 
@@ -1772,7 +1724,11 @@ function createAdHotspot(pageIndex, mapItem, ad) {
       return;
     }
     event.preventDefault();
-    activateAdHotspot(hotspot);
+    if (hotspot.classList.contains('is-active')) {
+      deactivateAdHotspot(hotspot);
+    } else {
+      activateAdHotspot(hotspot);
+    }
   });
   hotspot.addEventListener('keydown', event => {
     if (event.target !== hotspot) {
@@ -1780,7 +1736,11 @@ function createAdHotspot(pageIndex, mapItem, ad) {
     }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      activateAdHotspot(hotspot);
+      if (hotspot.classList.contains('is-active')) {
+        deactivateAdHotspot(hotspot);
+      } else {
+        activateAdHotspot(hotspot);
+      }
     }
   });
 
@@ -2173,14 +2133,18 @@ function handleDoubleClick(event) {
   }
 }
 
+function beginSwipeTracking(event) {
+  swipeState.pointerId = event.pointerId;
+  swipeState.startX = event.clientX;
+  swipeState.startY = event.clientY;
+  swipeState.startTime = event.timeStamp || performance.now();
+  swipeState.isTracking = true;
+  swipeState.isSwipe = false;
+}
+
 function startPan(event) {
   if (state.zoom.scale === 1) {
-    swipeState.pointerId = event.pointerId;
-    swipeState.startX = event.clientX;
-    swipeState.startY = event.clientY;
-    swipeState.startTime = event.timeStamp || performance.now();
-    swipeState.isTracking = true;
-    swipeState.isSwipe = false;
+    beginSwipeTracking(event);
     return;
   }
   swipeState.isTracking = false;
@@ -2195,6 +2159,20 @@ function startPan(event) {
   panState.startY = event.clientY;
   panState.baseX = state.zoom.translateX;
   panState.baseY = state.zoom.translateY;
+}
+
+function handleStagePointerDown(event) {
+  if (state.zoom.scale !== 1) {
+    return;
+  }
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+  if (target.closest('.ad-hotspot__actions, .nav-button, .zoom-menu')) {
+    return;
+  }
+  beginSwipeTracking(event);
 }
 
 function movePan(event) {

@@ -363,6 +363,7 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+  z-index: 5;
 }
 
 .ad-action {

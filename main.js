@@ -1772,11 +1772,7 @@ function createAdHotspot(pageIndex, mapItem, ad) {
       return;
     }
     event.preventDefault();
-    if (hotspot.classList.contains('is-active')) {
-      deactivateAdHotspot(hotspot);
-    } else {
-      activateAdHotspot(hotspot);
-    }
+    activateAdHotspot(hotspot);
   });
   hotspot.addEventListener('keydown', event => {
     if (event.target !== hotspot) {
@@ -1784,11 +1780,7 @@ function createAdHotspot(pageIndex, mapItem, ad) {
     }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      if (hotspot.classList.contains('is-active')) {
-        deactivateAdHotspot(hotspot);
-      } else {
-        activateAdHotspot(hotspot);
-      }
+      activateAdHotspot(hotspot);
     }
   });
 

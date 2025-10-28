@@ -950,9 +950,14 @@ body.theme-dark .reading-backdrop {
   margin: 0;
   padding: 0;
   width: 100%;
-  display: grid;
-  gap: var(--ads-panel-gutter);
-  grid-template-columns: repeat(var(--ads-panel-columns), minmax(0, 1fr));
+  column-gap: var(--ads-panel-gutter);
+  column-count: var(--ads-panel-columns);
+}
+
+.ads-panel__grid > .ads-card {
+  break-inside: avoid;
+  margin: 0 0 var(--ads-panel-gutter);
+  width: 100%;
 }
 
 @media (max-width: 1024px) {
@@ -988,17 +993,37 @@ body.theme-dark .reading-backdrop {
   border-radius: 1rem;
   padding: 1rem;
   box-shadow: 0 18px 35px rgba(15, 23, 42, 0.12);
-  transition: transform var(--transition), box-shadow var(--transition);
+  border: 2px solid transparent;
+  transition: transform var(--transition), box-shadow var(--transition), border var(--transition), background var(--transition);
   cursor: pointer;
   width: 100%;
   margin: 0;
   overflow: hidden;
 }
 
+.ads-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 0.85rem;
+  border: 2px solid transparent;
+  background: transparent;
+  transition: border var(--transition), background var(--transition);
+  pointer-events: none;
+}
+
 .ads-card:hover,
 .ads-card.is-active {
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
   transform: translateY(-2px);
+}
+
+.ads-card:hover::after,
+.ads-card.is-active::after,
+.ads-card:focus-visible::after,
+.ads-card:focus-within::after {
+  border-color: rgba(0, 87, 184, 0.6);
+  background: rgba(0, 87, 184, 0.08);
 }
 
 .ads-card__overlay {
@@ -1009,19 +1034,23 @@ body.theme-dark .reading-backdrop {
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.05) 0%, rgba(15, 23, 42, 0.85) 100%);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.75) 100%);
   color: #f8fafc;
-  transform: translateY(100%);
   opacity: 0;
   pointer-events: none;
-  transition: transform var(--transition-slow), opacity var(--transition-slow);
+  transition: opacity var(--transition-slow);
 }
 
 .ads-card:hover .ads-card__overlay,
 .ads-card.is-active .ads-card__overlay,
 .ads-card:focus-within .ads-card__overlay {
-  transform: translateY(0);
   opacity: 1;
+}
+
+.ads-card__overlay .ad-actions,
+.ads-card__overlay .ad-details,
+.ads-card__overlay .ad-details__links,
+.ads-card__overlay .ad-details__link {
   pointer-events: auto;
 }
 

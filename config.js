@@ -2,7 +2,7 @@ window.epaperConfig = {
   id: 8,
   paper: 'Kuukkeli',
   lang: 'fin',
-  homePageUrl: 'https://www.kuukkeli.fi',
+  homePageUrl: 'https://anummi.github.io/epaper',
   labels: {
     allPagesTitle: { fi: 'Kaikki sivut', en: 'All pages' },
     archiveTitle: { fi: 'Arkisto', en: 'Archive' },

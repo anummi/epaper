@@ -12,8 +12,6 @@ const SUPPORTED_LANGUAGES = {
   fi: 'fi-FI',
   en: 'en-US'
 };
-const DEFAULT_ADS_PANEL_GUTTER = 16;
-
 const AD_ACTION_FALLBACKS = {
   openLink: 'Avaa verkkosivusto',
   call: 'Soita',
@@ -101,8 +99,6 @@ const swipeState = {
   isTracking: false,
   isSwipe: false
 };
-
-let adsMasonryInstance = null;
 
 function normalizeLanguage(value) {
   if (!value) {
@@ -1810,19 +1806,6 @@ function getAdsPanelGrid() {
   return state.dom?.adsGrid || document.querySelector('.ads-panel__grid');
 }
 
-function getAdsPanelGutter(grid) {
-  const firstCard = grid?.querySelector?.('.ads-card');
-  if (!firstCard) {
-    return DEFAULT_ADS_PANEL_GUTTER;
-  }
-  const styles = window.getComputedStyle(firstCard);
-  const marginBottom = Number.parseFloat(styles.marginBottom);
-  if (Number.isFinite(marginBottom) && marginBottom > 0) {
-    return marginBottom;
-  }
-  return DEFAULT_ADS_PANEL_GUTTER;
-}
-
 function getAdsPanelColumnCount() {
   if (window.matchMedia?.('(max-width: 640px)').matches) {
     return 1;
@@ -1833,22 +1816,10 @@ function getAdsPanelColumnCount() {
   return 3;
 }
 
-function destroyAdsPanelLayout() {
-  if (adsMasonryInstance) {
-    adsMasonryInstance.destroy();
-    adsMasonryInstance = null;
-  }
-}
+function destroyAdsPanelLayout() {}
 
 function requestAdsPanelLayout() {
-  if (!adsMasonryInstance) {
-    return;
-  }
-  requestAnimationFrame(() => {
-    if (adsMasonryInstance) {
-      adsMasonryInstance.layout();
-    }
-  });
+  refreshAdsPanelLayout();
 }
 
 function refreshAdsPanelLayout() {
@@ -1858,60 +1829,10 @@ function refreshAdsPanelLayout() {
   }
   const cards = grid.querySelectorAll('.ads-card');
   if (!cards.length) {
-    destroyAdsPanelLayout();
     return;
   }
-
-  const gutter = getAdsPanelGutter(grid);
   const columns = Math.max(getAdsPanelColumnCount(), 1);
-  const gridWidth = grid.clientWidth;
-
-  if (gridWidth <= 0) {
-    return;
-  }
-
-  const availableWidth = Math.max(gridWidth - gutter * (columns - 1), 0);
-  const itemWidth = columns === 1 ? gridWidth : availableWidth / columns;
-
-  cards.forEach(card => {
-    card.style.width = `${itemWidth}px`;
-    card.style.marginBottom = `${gutter}px`;
-  });
-
   grid.style.setProperty('--ads-panel-columns', String(columns));
-  grid.style.setProperty('--ads-panel-item-width', `${itemWidth}px`);
-  const rawGutter = adsMasonryInstance?.options?.gutter;
-  const currentGutter = typeof rawGutter === 'number' && Number.isFinite(rawGutter)
-    ? rawGutter
-    : null;
-  if (adsMasonryInstance && currentGutter !== null && Math.abs(currentGutter - gutter) > 0.5) {
-    adsMasonryInstance.destroy();
-    adsMasonryInstance = null;
-  }
-
-  let createdInstance = false;
-
-  if (!adsMasonryInstance) {
-    adsMasonryInstance = new Masonry(grid, {
-      itemSelector: '.ads-card',
-      gutter,
-      columnWidth: itemWidth,
-      horizontalOrder: true
-    });
-    createdInstance = true;
-  } else {
-    adsMasonryInstance.options.gutter = gutter;
-    adsMasonryInstance.options.columnWidth = itemWidth;
-    adsMasonryInstance.gutter = gutter;
-    adsMasonryInstance.columnWidth = itemWidth;
-    adsMasonryInstance.reloadItems();
-  }
-
-  requestAdsPanelLayout();
-
-  if (createdInstance && typeof imagesLoaded === 'function') {
-    imagesLoaded(grid, () => requestAdsPanelLayout());
-  }
 }
 
 function openAdsPanel() {
@@ -1926,6 +1847,7 @@ function openAdsPanel() {
   buildAdsPanelContent();
   adsPanel.classList.add('is-open');
   adsPanel.setAttribute('aria-hidden', 'false');
+  adsPanel.classList.remove('ads-panel--blurred');
   document.body.classList.add('ads-open');
   requestAdsPanelLayout();
   requestAnimationFrame(() => {
@@ -1941,6 +1863,7 @@ function closeAdsPanel() {
   panel.classList.remove('is-open');
   panel.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('ads-open');
+  panel.classList.remove('ads-panel--blurred');
   destroyAdsPanelLayout();
 }
 
@@ -2090,11 +2013,6 @@ function createAdsPanelCard({ id, ad, pageIndex }) {
   }
   card.appendChild(header);
 
-  const detailsSection = createAdDetailsSection(ad);
-  if (detailsSection) {
-    card.appendChild(detailsSection);
-  }
-
   const mediaFigure = document.createElement('figure');
   mediaFigure.className = 'ads-card__media';
   const image = createAdImageElement(id, ad, {
@@ -2112,9 +2030,19 @@ function createAdsPanelCard({ id, ad, pageIndex }) {
     card.appendChild(fallback);
   }
 
+  const detailsSection = createAdDetailsSection(ad);
   const actions = createAdActionsContainer(id, ad);
-  if (actions) {
-    card.appendChild(actions);
+
+  if (detailsSection || actions) {
+    const overlay = document.createElement('div');
+    overlay.className = 'ads-card__overlay';
+    if (detailsSection) {
+      overlay.appendChild(detailsSection);
+    }
+    if (actions) {
+      overlay.appendChild(actions);
+    }
+    card.appendChild(overlay);
   }
 
   card.addEventListener('pointerenter', () => card.classList.add('is-active'));
@@ -3164,6 +3092,7 @@ function openAdById(adId) {
 
   readingWindow.classList.add('reading-window--ad');
   openReadingWindow();
+  state.dom.adsPanel?.classList.add('ads-panel--blurred');
 
   const heading = state.dom.readingTitle;
   if (heading) {
@@ -3951,6 +3880,7 @@ function closeReadingWindow() {
   readingWindow.classList.remove('is-open');
   readingWindow.setAttribute('aria-hidden', 'true');
   readingWindow.classList.remove('reading-window--ad');
+  state.dom.adsPanel?.classList.remove('ads-panel--blurred');
   document.body.classList.remove('reading-open');
   if (readingBackdrop) {
     readingBackdrop.classList.remove('is-visible');

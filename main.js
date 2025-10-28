@@ -1938,6 +1938,9 @@ function getAdsGridMetrics() {
     return null;
   }
   const styles = window.getComputedStyle(grid);
+  if (styles.display !== 'grid') {
+    return null;
+  }
   const rowHeight = Number.parseFloat(styles.getPropertyValue('--ads-grid-row-height')) || 12;
   const gapValue = styles.rowGap || styles.getPropertyValue('grid-row-gap') || styles.gap || '0';
   const rowGap = Number.parseFloat(gapValue) || 0;
@@ -3476,18 +3479,22 @@ function startPan(event) {
     return;
   }
   updatePointerTracker(event);
-  surface.setPointerCapture(event.pointerId);
-  if (event.pointerType === 'touch' && pointerTracker.size >= 2) {
+  const isTouch = event.pointerType === 'touch';
+
+  if (isTouch && pointerTracker.size >= 2) {
+    surface.setPointerCapture(event.pointerId);
     beginPinch(surface);
     return;
   }
   if (pinchState.active) {
+    surface.setPointerCapture(event.pointerId);
     return;
   }
   if (state.zoom.scale === 1) {
     beginSwipeTracking(event);
     return;
   }
+  surface.setPointerCapture(event.pointerId);
   swipeState.isTracking = false;
   swipeState.pointerId = null;
   swipeState.isSwipe = false;

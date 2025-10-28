@@ -37,7 +37,19 @@ const state = {
     language: 'fi',
     darkMode: false
   },
-  dom: {}
+  dom: {},
+  mobileMenu: {
+    isOpen: false,
+    isQuickActive: false,
+    pressTimer: null,
+    ignoreClick: false,
+    longPressTriggered: false,
+    rotation: 0,
+    rotationPointerId: null,
+    rotationStartAngle: 0,
+    rotationStartValue: 0,
+    listenersAttached: false
+  }
 };
 
 const panState = {
@@ -118,6 +130,22 @@ function getNavigationLabelByAction(action) {
     return '';
   }
   return getLocalizedValue(entry.label, '');
+}
+
+function createIconSvg(definition, options = {}) {
+  if (!definition || !definition.path) {
+    return null;
+  }
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('aria-hidden', options.ariaHidden === false ? 'false' : 'true');
+  svg.setAttribute('viewBox', definition.viewBox || '0 0 24 24');
+  if (options.className) {
+    svg.classList.add(options.className);
+  }
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', definition.path);
+  svg.appendChild(path);
+  return svg;
 }
 
 function loadStoredSettings() {
@@ -327,6 +355,58 @@ function buildLayout() {
   settingsPanel.appendChild(settingsDialog);
   shell.appendChild(settingsPanel);
 
+  const mobileMenu = document.createElement('div');
+  mobileMenu.className = 'mobile-menu';
+
+  const mobileMenuToggle = document.createElement('button');
+  mobileMenuToggle.type = 'button';
+  mobileMenuToggle.className = 'mobile-menu__toggle';
+  mobileMenuToggle.setAttribute('aria-expanded', 'false');
+  mobileMenuToggle.setAttribute('aria-label', 'Valikko');
+
+  const menuIconDef = {
+    viewBox: '0 0 24 24',
+    path: 'M3 5h18v2H3zm0 6h18v2H3zm0 6h18v2H3z'
+  };
+  const closeIconDef = {
+    viewBox: '0 0 512 512',
+    path: 'M310.6 256L476.7 90.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L256 210.7 90.7 45.3c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L210.7 256 45.3 421.3c-12.5 12.5-12.5 32.8 0 45.3 6.2 6.3 14.4 9.4 22.6 9.4s16.4-3.1 22.6-9.4L256 301.3l165.3 165.3c6.2 6.3 14.4 9.4 22.6 9.4s16.4-3.1 22.6-9.4c12.5-12.5 12.5-32.8 0-45.3L301.3 256z'
+  };
+
+  const menuIcon = createIconSvg(menuIconDef, { className: 'mobile-menu__icon mobile-menu__icon--menu' });
+  const closeIcon = createIconSvg(closeIconDef, { className: 'mobile-menu__icon mobile-menu__icon--close' });
+  if (menuIcon) {
+    mobileMenuToggle.appendChild(menuIcon);
+  }
+  if (closeIcon) {
+    mobileMenuToggle.appendChild(closeIcon);
+  }
+  mobileMenu.appendChild(mobileMenuToggle);
+
+  const mobileQuickRoot = document.createElement('div');
+  mobileQuickRoot.className = 'mobile-menu__quick';
+  mobileQuickRoot.setAttribute('aria-hidden', 'true');
+  const mobileQuickWheel = document.createElement('div');
+  mobileQuickWheel.className = 'mobile-menu__wheel';
+  mobileQuickRoot.appendChild(mobileQuickWheel);
+  mobileMenu.appendChild(mobileQuickRoot);
+
+  document.body.appendChild(mobileMenu);
+
+  const mobileMenuPanel = document.createElement('div');
+  mobileMenuPanel.className = 'mobile-menu__panel';
+  mobileMenuPanel.setAttribute('aria-hidden', 'true');
+  const mobileMenuSheet = document.createElement('div');
+  mobileMenuSheet.className = 'mobile-menu__sheet';
+  const mobileMenuHandle = document.createElement('div');
+  mobileMenuHandle.className = 'mobile-menu__handle';
+  mobileMenuSheet.appendChild(mobileMenuHandle);
+  const mobileMenuList = document.createElement('div');
+  mobileMenuList.className = 'mobile-menu__list';
+  mobileMenuSheet.appendChild(mobileMenuList);
+  mobileMenuPanel.appendChild(mobileMenuSheet);
+  document.body.appendChild(mobileMenuPanel);
+
   state.dom = {
     shell,
     menuContent,
@@ -358,8 +438,18 @@ function buildLayout() {
     languageLabel: languageSpan,
     languageSelect,
     darkModeLabel: darkModeSpan,
-    darkModeToggle
+    darkModeToggle,
+    mobileMenu,
+    mobileMenuToggle,
+    mobileMenuPanel,
+    mobileMenuSheet,
+    mobileMenuList,
+    mobileQuickRoot,
+    mobileQuickMenu: mobileQuickWheel
   };
+
+  updateMobileMenuState();
+  updateQuickMenuLayout();
 }
 
 function applyTheme() {
@@ -426,6 +516,8 @@ function refreshLocalizedTexts(options = {}) {
   if (dom.darkModeLabel) {
     dom.darkModeLabel.textContent = resolveLabel('settingsDarkMode', 'Tumma tila');
   }
+
+  updateMobileMenuState();
 
   document.documentElement.lang = state.settings.language || 'fi';
 
@@ -558,68 +650,142 @@ function applyIssue(issue, options = {}) {
 }
 
 function buildNavigation() {
-  const container = state.dom?.menuContent || document.querySelector('.menu-content');
-  if (!container) {
-    return;
-  }
+  const desktopContainer = state.dom?.menuContent || document.querySelector('.menu-content');
+  const mobileList = state.dom?.mobileMenuList || document.querySelector('.mobile-menu__list');
+  const quickWheel = state.dom?.mobileQuickMenu || document.querySelector('.mobile-menu__wheel');
 
-  container.innerHTML = '';
+  if (desktopContainer) {
+    desktopContainer.innerHTML = '';
+  }
+  if (mobileList) {
+    mobileList.innerHTML = '';
+  }
+  if (quickWheel) {
+    quickWheel.innerHTML = '';
+  }
 
   const navigationItems = Array.isArray(state.config?.navigation)
     ? state.config.navigation
     : [];
+
   navigationItems.forEach(item => {
     if (!item) {
       return;
     }
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.classList.add('menu-item');
-    if (item.className) {
-      button.classList.add(item.className);
-    }
-    if (item.action) {
-      button.dataset.action = item.action;
-    }
-    button.dataset.bound = 'false';
+    if (desktopContainer) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.classList.add('menu-item');
+      if (item.className) {
+        button.classList.add(item.className);
+      }
+      if (item.action) {
+        button.dataset.action = item.action;
+      }
+      button.dataset.bound = 'false';
 
-    if (item.icon && item.icon.path) {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('aria-hidden', 'true');
-      svg.setAttribute('viewBox', item.icon.viewBox || '0 0 24 24');
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', item.icon.path);
-      svg.appendChild(path);
-      button.appendChild(svg);
+      const icon = createIconSvg(item.icon);
+      if (icon) {
+        button.appendChild(icon);
+      }
+
+      const labelText = getLocalizedValue(item.label, '');
+      if (labelText) {
+        const label = document.createElement('span');
+        label.textContent = labelText;
+        button.appendChild(label);
+        button.title = labelText;
+        button.setAttribute('aria-label', labelText);
+      }
+
+      desktopContainer.appendChild(button);
     }
 
-    const labelText = getLocalizedValue(item.label, '');
-    if (labelText) {
-      const label = document.createElement('span');
-      label.textContent = labelText;
-      button.appendChild(label);
-      button.title = labelText;
-      button.setAttribute('aria-label', labelText);
-    }
+    if (mobileList) {
+      const mobileButton = document.createElement('button');
+      mobileButton.type = 'button';
+      mobileButton.className = 'mobile-menu__item';
+      if (item.action) {
+        mobileButton.dataset.action = item.action;
+      }
+      mobileButton.dataset.bound = 'false';
 
-    container.appendChild(button);
+      const icon = createIconSvg(item.icon, { className: 'mobile-menu__item-icon' });
+      if (icon) {
+        mobileButton.appendChild(icon);
+      }
+
+      const labelText = getLocalizedValue(item.label, '');
+      if (labelText) {
+        const label = document.createElement('span');
+        label.className = 'mobile-menu__item-label';
+        label.textContent = labelText;
+        mobileButton.appendChild(label);
+        mobileButton.title = labelText;
+        mobileButton.setAttribute('aria-label', labelText);
+      }
+
+      mobileList.appendChild(mobileButton);
+    }
   });
+
+  const quickItems = navigationItems
+    .filter(item => item && item.action && item.action !== 'toggle-menu')
+    .slice(0, 12);
+
+  if (quickWheel) {
+    const totalQuick = quickItems.length;
+    quickItems.forEach((item, index) => {
+      const quickButton = document.createElement('button');
+      quickButton.type = 'button';
+      quickButton.className = 'mobile-menu__quick-item';
+      quickButton.dataset.bound = 'false';
+      if (item.action) {
+        quickButton.dataset.action = item.action;
+      }
+
+      const icon = createIconSvg(item.icon, { className: 'mobile-menu__quick-icon' });
+      if (icon) {
+        quickButton.appendChild(icon);
+      }
+
+      const labelText = getLocalizedValue(item.label, '');
+      if (labelText) {
+        const label = document.createElement('span');
+        label.textContent = labelText;
+        quickButton.appendChild(label);
+        quickButton.title = labelText;
+        quickButton.setAttribute('aria-label', labelText);
+      }
+
+      const step = totalQuick > 0 ? 360 / totalQuick : 0;
+      const baseAngle = normalizeRotation(225 + step * index);
+      quickButton.dataset.baseAngle = String(baseAngle);
+      quickWheel.appendChild(quickButton);
+    });
+  }
+
+  updateQuickMenuLayout();
 }
 
 function bindNavigationHandlers() {
-  const container = state.dom?.menuContent;
-  if (!container) {
-    return;
-  }
-  const buttons = container.querySelectorAll('[data-action]');
-  buttons.forEach(button => {
-    if (!button || button.dataset.bound === 'true') {
-      return;
-    }
-    button.dataset.bound = 'true';
-    button.addEventListener('click', () => {
-      const action = button.dataset.action;
-      handleNavigationAction(action);
+  const containers = [
+    state.dom?.menuContent,
+    state.dom?.mobileMenuList,
+    state.dom?.mobileQuickMenu
+  ].filter(Boolean);
+
+  containers.forEach(container => {
+    const buttons = container.querySelectorAll('[data-action]');
+    buttons.forEach(button => {
+      if (!button || button.dataset.bound === 'true') {
+        return;
+      }
+      button.dataset.bound = 'true';
+      button.addEventListener('click', () => {
+        const action = button.dataset.action;
+        handleNavigationAction(action);
+      });
     });
   });
 }
@@ -647,6 +813,351 @@ function handleNavigationAction(action) {
     default:
       break;
   }
+
+  if (state.mobileMenu?.isOpen || state.mobileMenu?.isQuickActive) {
+    closeQuickMenu();
+    closeMobileMenu();
+  }
+}
+
+function updateMobileMenuState() {
+  const {
+    mobileMenu,
+    mobileMenuToggle,
+    mobileMenuPanel,
+    mobileQuickRoot
+  } = state.dom || {};
+
+  const isActive = Boolean(state.mobileMenu.isOpen || state.mobileMenu.isQuickActive);
+
+  if (mobileMenu) {
+    mobileMenu.classList.toggle('mobile-menu--open', Boolean(state.mobileMenu.isOpen));
+    mobileMenu.classList.toggle('mobile-menu--quick', Boolean(state.mobileMenu.isQuickActive));
+  }
+  if (mobileMenuToggle) {
+    mobileMenuToggle.classList.toggle('is-active', isActive);
+    mobileMenuToggle.setAttribute('aria-expanded', isActive ? 'true' : 'false');
+    const label = isActive
+      ? resolveLabel('closeMenu', 'Sulje valikko')
+      : resolveLabel('openMenu', 'Valikko');
+    mobileMenuToggle.setAttribute('aria-label', label);
+  }
+  if (mobileMenuPanel) {
+    mobileMenuPanel.classList.toggle('is-visible', Boolean(state.mobileMenu.isOpen));
+    mobileMenuPanel.setAttribute('aria-hidden', state.mobileMenu.isOpen ? 'false' : 'true');
+  }
+  if (mobileQuickRoot) {
+    mobileQuickRoot.setAttribute('aria-hidden', state.mobileMenu.isQuickActive ? 'false' : 'true');
+  }
+
+  document.body.classList.toggle('mobile-menu-active', Boolean(state.mobileMenu.isOpen));
+}
+
+function clearMobileMenuPressTimer() {
+  if (state.mobileMenu.pressTimer) {
+    clearTimeout(state.mobileMenu.pressTimer);
+    state.mobileMenu.pressTimer = null;
+  }
+}
+
+function openMobileMenu() {
+  if (!document.body.classList.contains('is-mobile')) {
+    return;
+  }
+  state.mobileMenu.isOpen = true;
+  state.mobileMenu.isQuickActive = false;
+  updateMobileMenuState();
+}
+
+function closeMobileMenu() {
+  if (!state.mobileMenu.isOpen) {
+    return;
+  }
+  state.mobileMenu.isOpen = false;
+  updateMobileMenuState();
+}
+
+function toggleMobileMenu() {
+  if (state.mobileMenu.isOpen) {
+    closeMobileMenu();
+  } else {
+    openMobileMenu();
+  }
+}
+
+function openQuickMenu() {
+  if (!document.body.classList.contains('is-mobile')) {
+    return;
+  }
+  state.mobileMenu.isQuickActive = true;
+  state.mobileMenu.isOpen = false;
+  state.mobileMenu.rotation = normalizeRotation(state.mobileMenu.rotation);
+  updateQuickMenuLayout();
+  updateMobileMenuState();
+}
+
+function closeQuickMenu() {
+  if (!state.mobileMenu.isQuickActive) {
+    return;
+  }
+  const pointerId = state.mobileMenu.rotationPointerId;
+  const quickWheel = state.dom?.mobileQuickMenu;
+  if (pointerId !== null && quickWheel?.releasePointerCapture) {
+    try {
+      quickWheel.releasePointerCapture(pointerId);
+    } catch (error) {
+      // Ignore release errors when pointer is already released.
+    }
+  }
+  state.mobileMenu.isQuickActive = false;
+  state.mobileMenu.rotationPointerId = null;
+  state.mobileMenu.rotationStartAngle = 0;
+  state.mobileMenu.rotationStartValue = 0;
+  updateMobileMenuState();
+}
+
+function handleMobileMenuPointerDown(event) {
+  if (event.button !== 0) {
+    return;
+  }
+  if (!document.body.classList.contains('is-mobile')) {
+    return;
+  }
+  const toggle = state.dom?.mobileMenuToggle;
+  if (!toggle) {
+    return;
+  }
+  state.mobileMenu.ignoreClick = false;
+  state.mobileMenu.longPressTriggered = false;
+  clearMobileMenuPressTimer();
+  if (toggle.setPointerCapture) {
+    try {
+      toggle.setPointerCapture(event.pointerId);
+    } catch (error) {
+      // Ignore capture failures on unsupported browsers.
+    }
+  }
+  state.mobileMenu.pressTimer = window.setTimeout(() => {
+    state.mobileMenu.longPressTriggered = true;
+    state.mobileMenu.ignoreClick = true;
+    openQuickMenu();
+  }, 450);
+}
+
+function handleMobileMenuPointerUp(event) {
+  const toggle = state.dom?.mobileMenuToggle;
+  if (toggle?.releasePointerCapture) {
+    try {
+      toggle.releasePointerCapture(event.pointerId);
+    } catch (error) {
+      // Ignore release errors when pointer is already released.
+    }
+  }
+  clearMobileMenuPressTimer();
+  if (state.mobileMenu.longPressTriggered) {
+    event.preventDefault();
+  }
+}
+
+function handleMobileMenuPointerCancel(event) {
+  const toggle = state.dom?.mobileMenuToggle;
+  if (toggle?.releasePointerCapture) {
+    try {
+      toggle.releasePointerCapture(event.pointerId);
+    } catch (error) {
+      // Ignore release errors when pointer is already released.
+    }
+  }
+  clearMobileMenuPressTimer();
+}
+
+function handleMobileMenuClick(event) {
+  if (state.mobileMenu.ignoreClick) {
+    state.mobileMenu.ignoreClick = false;
+    return;
+  }
+
+  if (state.mobileMenu.isQuickActive) {
+    closeQuickMenu();
+    return;
+  }
+
+  toggleMobileMenu();
+}
+
+function attachMobileMenuListeners() {
+  if (state.mobileMenu.listenersAttached) {
+    return;
+  }
+  const {
+    mobileMenuToggle,
+    mobileMenuPanel,
+    mobileMenuSheet,
+    mobileMenu,
+    mobileQuickRoot,
+    mobileQuickMenu
+  } = state.dom || {};
+
+  if (!mobileMenuToggle) {
+    return;
+  }
+
+  state.mobileMenu.listenersAttached = true;
+
+  mobileMenuToggle.addEventListener('pointerdown', handleMobileMenuPointerDown);
+  mobileMenuToggle.addEventListener('pointerup', handleMobileMenuPointerUp);
+  mobileMenuToggle.addEventListener('pointercancel', handleMobileMenuPointerCancel);
+  mobileMenuToggle.addEventListener('pointerleave', handleMobileMenuPointerCancel);
+  mobileMenuToggle.addEventListener('click', handleMobileMenuClick);
+
+  mobileMenuPanel?.addEventListener('click', event => {
+    if (event.target === mobileMenuPanel) {
+      closeMobileMenu();
+    }
+  });
+
+  mobileMenuSheet?.addEventListener('click', event => {
+    if (event.target.closest('[data-action]')) {
+      closeMobileMenu();
+    }
+  });
+
+  if (mobileQuickRoot) {
+    mobileQuickRoot.addEventListener('click', event => {
+      if (event.target.closest('.mobile-menu__quick-item')) {
+        closeQuickMenu();
+      }
+    });
+  }
+
+  if (mobileQuickMenu) {
+    mobileQuickMenu.addEventListener('pointerdown', startQuickMenuRotation);
+    mobileQuickMenu.addEventListener('pointermove', rotateQuickMenu);
+    mobileQuickMenu.addEventListener('pointerup', endQuickMenuRotation);
+    mobileQuickMenu.addEventListener('pointercancel', endQuickMenuRotation);
+  }
+
+  document.addEventListener('click', event => {
+    if (!state.mobileMenu.isOpen && !state.mobileMenu.isQuickActive) {
+      return;
+    }
+    if (mobileMenu?.contains(event.target) || mobileMenuPanel?.contains(event.target)) {
+      return;
+    }
+    closeQuickMenu();
+    closeMobileMenu();
+  });
+}
+
+function startQuickMenuRotation(event) {
+  if (!state.mobileMenu.isQuickActive) {
+    return;
+  }
+  if (event.target.closest('.mobile-menu__quick-item')) {
+    return;
+  }
+  const quickWheel = state.dom?.mobileQuickMenu;
+  if (!quickWheel) {
+    return;
+  }
+
+  state.mobileMenu.rotationPointerId = event.pointerId;
+  state.mobileMenu.rotationStartAngle = getQuickMenuAngle(event);
+  state.mobileMenu.rotationStartValue = state.mobileMenu.rotation;
+
+  if (quickWheel.setPointerCapture) {
+    try {
+      quickWheel.setPointerCapture(event.pointerId);
+    } catch (error) {
+      // Ignore capture errors on unsupported browsers.
+    }
+  }
+  event.preventDefault();
+}
+
+function rotateQuickMenu(event) {
+  if (!state.mobileMenu.isQuickActive) {
+    return;
+  }
+  if (state.mobileMenu.rotationPointerId !== event.pointerId) {
+    return;
+  }
+  const angle = getQuickMenuAngle(event);
+  const delta = angle - state.mobileMenu.rotationStartAngle;
+  state.mobileMenu.rotation = normalizeRotation(state.mobileMenu.rotationStartValue + delta);
+  updateQuickMenuLayout();
+}
+
+function endQuickMenuRotation(event) {
+  if (state.mobileMenu.rotationPointerId !== event.pointerId) {
+    return;
+  }
+  const quickWheel = state.dom?.mobileQuickMenu;
+  if (quickWheel?.releasePointerCapture) {
+    try {
+      quickWheel.releasePointerCapture(event.pointerId);
+    } catch (error) {
+      // Ignore release errors when pointer is already released.
+    }
+  }
+  state.mobileMenu.rotationPointerId = null;
+  state.mobileMenu.rotationStartAngle = 0;
+  state.mobileMenu.rotationStartValue = state.mobileMenu.rotation;
+}
+
+function getQuickMenuAngle(event) {
+  const root = state.dom?.mobileQuickRoot;
+  if (!root) {
+    return 0;
+  }
+  const rect = root.getBoundingClientRect();
+  const cx = rect.right;
+  const cy = rect.bottom;
+  const dx = event.clientX - cx;
+  const dy = event.clientY - cy;
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+function normalizeRotation(value) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  let normalized = value % 360;
+  if (normalized < 0) {
+    normalized += 360;
+  }
+  return normalized;
+}
+
+function updateQuickMenuLayout() {
+  const quickWheel = state.dom?.mobileQuickMenu;
+  const quickRoot = state.dom?.mobileQuickRoot;
+  if (!quickWheel || !quickRoot) {
+    return;
+  }
+  const items = quickWheel.querySelectorAll('.mobile-menu__quick-item');
+  if (!items.length) {
+    return;
+  }
+  const rect = quickRoot.getBoundingClientRect();
+  const radius = Math.min(rect.width, rect.height);
+  if (!radius) {
+    return;
+  }
+  const toggleSize = state.dom?.mobileMenuToggle
+    ? Math.max(state.dom.mobileMenuToggle.offsetWidth, state.dom.mobileMenuToggle.offsetHeight)
+    : 64;
+  const distance = Math.max(toggleSize * 1.15, radius - toggleSize * 0.75);
+
+  items.forEach(item => {
+    const baseAngle = Number(item.dataset.baseAngle) || 0;
+    const angle = baseAngle + state.mobileMenu.rotation;
+    const radians = (angle * Math.PI) / 180;
+    const x = Math.cos(radians) * distance;
+    const y = Math.sin(radians) * distance;
+    item.style.setProperty('--dx', `${x.toFixed(2)}px`);
+    item.style.setProperty('--dy', `${y.toFixed(2)}px`);
+  });
 }
 
 function attachGlobalListeners() {
@@ -712,6 +1223,7 @@ function attachGlobalListeners() {
   document.addEventListener('keydown', handleKeydown);
   window.addEventListener('resize', handleResize);
 
+  attachMobileMenuListeners();
   bindNavigationHandlers();
 }
 
@@ -739,6 +1251,14 @@ function handleDarkModeChange(event) {
 
 function handleKeydown(event) {
   if (event.key === 'Escape') {
+    if (state.mobileMenu?.isQuickActive) {
+      closeQuickMenu();
+      return;
+    }
+    if (state.mobileMenu?.isOpen) {
+      closeMobileMenu();
+      return;
+    }
     if (document.body.classList.contains('is-zoomed')) {
       resetZoom();
       return;
@@ -862,6 +1382,7 @@ function handleResize() {
   state.resizeTimer = setTimeout(() => {
     const newOrientation = window.innerWidth > window.innerHeight ? 'landscape' : 'portrait';
     const isCompact = window.innerWidth < 900;
+    updateResponsiveFlags({ orientation: newOrientation });
     if (newOrientation !== state.orientation || isCompact !== state.isCompact) {
       renderSlides();
       updateAllPagesSizing();
@@ -877,6 +1398,21 @@ function handleResize() {
     }
     updateAllPagesSizing();
   }, 180);
+}
+
+function updateResponsiveFlags({ orientation }) {
+  const isMobile = window.innerWidth <= 820;
+  document.body.classList.toggle('is-mobile', isMobile);
+  document.body.classList.toggle('is-mobile-portrait', isMobile && orientation === 'portrait');
+  document.body.classList.toggle('is-mobile-landscape', isMobile && orientation === 'landscape');
+
+  if (!isMobile) {
+    closeQuickMenu();
+    closeMobileMenu();
+  }
+
+  updateMobileMenuState();
+  updateQuickMenuLayout();
 }
 
 async function loadIssueData(config, issuePath) {
@@ -945,6 +1481,8 @@ function renderSlides() {
   const isCompact = window.innerWidth < 900;
   state.orientation = orientation;
   state.isCompact = isCompact;
+
+  updateResponsiveFlags({ orientation });
 
   const definitions = buildSlideDefinitions({ orientation, isCompact });
   state.slideDefinitions = definitions;

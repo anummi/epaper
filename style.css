@@ -129,6 +129,15 @@ body:not(.menu-collapsed) .menu-bar {
   box-shadow: 18px 0 35px rgba(15, 23, 42, 0.12);
 }
 
+body.is-mobile .app-shell {
+  padding-left: 0;
+  box-shadow: none;
+}
+
+body.is-mobile .menu-bar {
+  display: none;
+}
+
 @media (max-width: 768px) {
   body {
     --menu-expanded-width: clamp(10rem, 60vw, 12rem);
@@ -289,6 +298,41 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   pointer-events: none;
 }
 
+body.is-mobile .page-stage {
+  padding-inline: clamp(0.75rem, 6vw, 1.75rem);
+  padding-block: clamp(0.75rem, 5vw, 1.5rem);
+}
+
+body.is-mobile .page-track {
+  align-items: stretch;
+}
+
+body.is-mobile-portrait .page-track {
+  align-items: flex-start;
+}
+
+body.is-mobile .page-surface {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: none;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+body.is-mobile .page-image {
+  width: 100%;
+}
+
+body.is-mobile .page-image + .page-image {
+  border-left: none;
+  margin-top: clamp(0.75rem, 3vw, 1.25rem);
+}
+
+body.is-mobile .page-image img {
+  width: 100%;
+  height: auto;
+}
+
 .maprect {
   fill: rgba(0, 87, 184, 0.12);
   stroke: rgba(0, 87, 184, 0.45);
@@ -306,6 +350,10 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
 
 body.is-zoomed .maprect {
   pointer-events: none;
+}
+
+body.mobile-menu-active {
+  overflow: hidden;
 }
 
 .nav-button {
@@ -397,6 +445,289 @@ body.reading-open .zoom-menu {
 body.theme-dark .zoom-menu {
   background: rgba(17, 24, 39, 0.9);
   box-shadow: 0 12px 35px rgba(2, 6, 23, 0.6);
+}
+
+.mobile-menu {
+  --toggle-size: clamp(3.25rem, 16vw, 3.75rem);
+  position: fixed;
+  bottom: clamp(1rem, 4vw, 1.75rem);
+  right: clamp(1rem, 4vw, 1.75rem);
+  z-index: 50;
+  display: none;
+}
+
+body.is-mobile .mobile-menu {
+  display: block;
+}
+
+.mobile-menu__toggle {
+  position: relative;
+  width: var(--toggle-size);
+  height: var(--toggle-size);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--surface-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 18px 35px rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), transform var(--transition), box-shadow var(--transition);
+  pointer-events: auto;
+}
+
+.mobile-menu__toggle svg {
+  width: 1.65rem;
+  height: 1.65rem;
+  fill: currentColor;
+}
+
+.mobile-menu__icon {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity var(--transition), transform var(--transition);
+}
+
+.mobile-menu__icon--menu {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.mobile-menu__toggle.is-active .mobile-menu__icon--menu {
+  opacity: 0;
+  transform: scale(0.6) rotate(-90deg);
+}
+
+.mobile-menu__toggle.is-active .mobile-menu__icon--close {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.mobile-menu__toggle:focus-visible,
+.mobile-menu__toggle:hover {
+  background: var(--accent);
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 20px 45px rgba(0, 87, 184, 0.35);
+}
+
+body.theme-dark .mobile-menu__toggle {
+  background: var(--surface);
+  color: var(--surface-strong);
+  border-color: rgba(148, 163, 184, 0.3);
+  box-shadow: 0 20px 45px rgba(2, 6, 23, 0.55);
+}
+
+body.theme-dark .mobile-menu__toggle:focus-visible,
+body.theme-dark .mobile-menu__toggle:hover {
+  background: var(--accent);
+  color: #0b1120;
+  box-shadow: 0 22px 48px rgba(96, 165, 250, 0.35);
+}
+
+.mobile-menu__panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-slow);
+  display: flex;
+  align-items: flex-end;
+  z-index: 45;
+}
+
+.mobile-menu__panel.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-menu__sheet {
+  width: 100%;
+  max-height: 70vh;
+  background: var(--surface);
+  border-radius: 1.5rem 1.5rem 0 0;
+  padding: clamp(1rem, 4vw, 1.5rem) clamp(1rem, 6vw, 2rem);
+  box-shadow: 0 -18px 45px rgba(15, 23, 42, 0.2);
+  transform: translateY(1.5rem);
+  transition: transform var(--transition-slow);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.75rem, 3vw, 1.25rem);
+  overflow-y: auto;
+}
+
+.mobile-menu__panel.is-visible .mobile-menu__sheet {
+  transform: translateY(0);
+}
+
+.mobile-menu__handle {
+  align-self: center;
+  width: clamp(3rem, 18vw, 3.75rem);
+  height: 0.4rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.12);
+}
+
+.mobile-menu__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}
+
+.mobile-menu__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.75);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
+}
+
+.mobile-menu__item:focus-visible,
+.mobile-menu__item:hover {
+  background: var(--accent-light);
+  border-color: rgba(0, 87, 184, 0.25);
+  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.12);
+}
+
+.mobile-menu__item-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: currentColor;
+}
+
+.mobile-menu__item-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+body.theme-dark .mobile-menu__panel {
+  background: rgba(8, 11, 21, 0.55);
+}
+
+body.theme-dark .mobile-menu__sheet {
+  background: var(--surface);
+  box-shadow: 0 -18px 45px rgba(2, 6, 23, 0.55);
+}
+
+body.theme-dark .mobile-menu__item {
+  background: rgba(17, 24, 39, 0.75);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+body.theme-dark .mobile-menu__item:focus-visible,
+body.theme-dark .mobile-menu__item:hover {
+  background: rgba(96, 165, 250, 0.18);
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.mobile-menu__quick {
+  position: fixed;
+  bottom: clamp(1rem, 4vw, 1.75rem);
+  right: clamp(1rem, 4vw, 1.75rem);
+  width: var(--quick-radius, min(60vw, 14rem));
+  height: var(--quick-radius, min(60vw, 14rem));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition);
+  z-index: 49;
+}
+
+.mobile-menu--quick .mobile-menu__quick {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-menu__wheel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 100% 0 0 0;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--border);
+  box-shadow: 0 22px 45px rgba(15, 23, 42, 0.25);
+  pointer-events: auto;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.mobile-menu__wheel:active {
+  cursor: grabbing;
+}
+
+body.theme-dark .mobile-menu__wheel {
+  background: rgba(17, 24, 39, 0.92);
+  border-color: rgba(148, 163, 184, 0.3);
+  box-shadow: 0 24px 50px rgba(2, 6, 23, 0.65);
+}
+
+.mobile-menu__quick-item {
+  position: absolute;
+  bottom: calc(var(--toggle-size, 3.5rem) / 2);
+  right: calc(var(--toggle-size, 3.5rem) / 2);
+  transform: translate(var(--dx, 0px), var(--dy, 0px));
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 3.1rem;
+  min-height: 3.1rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.22);
+  transition: background var(--transition), box-shadow var(--transition), transform var(--transition), color var(--transition);
+}
+
+.mobile-menu__quick-item:focus-visible,
+.mobile-menu__quick-item:hover {
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 18px 40px rgba(0, 87, 184, 0.35);
+}
+
+.mobile-menu__quick-item span {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.mobile-menu__quick-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: currentColor;
+}
+
+body.theme-dark .mobile-menu__quick-item {
+  background: rgba(17, 24, 39, 0.92);
+  color: var(--surface-strong);
+}
+
+body.theme-dark .mobile-menu__quick-item:focus-visible,
+body.theme-dark .mobile-menu__quick-item:hover {
+  background: var(--accent);
+  color: #0b1120;
 }
 
 .zoom-button {

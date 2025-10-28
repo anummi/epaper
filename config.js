@@ -29,7 +29,25 @@ window.epaperConfig = {
     articleError: { fi: 'Artikkelin lataaminen epäonnistui.', en: 'Failed to load the article.' },
     readingWindowTitle: { fi: 'Lukuikkuna', en: 'Reading window' },
     prevArticle: { fi: 'Edellinen juttu', en: 'Previous article' },
-    nextArticle: { fi: 'Seuraava juttu', en: 'Next article' }
+    nextArticle: { fi: 'Seuraava juttu', en: 'Next article' },
+    audioPlayerTitle: { fi: 'Kuuntele lehti', en: 'Listen to the issue' },
+    audioPageLabel: { fi: 'Sivu', en: 'Page' },
+    audioCloseLabel: { fi: 'Sulje kuuntelu', en: 'Close audio' },
+    audioPrevLabel: { fi: 'Edellinen juttu', en: 'Previous article' },
+    audioNextLabel: { fi: 'Seuraava juttu', en: 'Next article' },
+    audioPlayLabel: { fi: 'Toista', en: 'Play' },
+    audioPauseLabel: { fi: 'Tauota', en: 'Pause' },
+    audioResumePrompt: { fi: 'Jatketaanko kohdasta "{title}" vai aloitetaan alusta?', en: 'Resume from "{title}" or start over?' },
+    audioResumeContinue: { fi: 'Jatka kuuntelua', en: 'Resume listening' },
+    audioResumeRestart: { fi: 'Aloita alusta', en: 'Start over' },
+    audioResumeFallbackTitle: { fi: 'viimeisin kuunneltu juttu', en: 'the last listened article' },
+    audioStatusIdle: { fi: 'Valmis kuunneltavaksi.', en: 'Ready to play.' },
+    audioStatusLoading: { fi: 'Yhdistetään ääneen…', en: 'Loading audio…' },
+    audioStatusPlaying: { fi: 'Toistetaan.', en: 'Playing.' },
+    audioStatusPaused: { fi: 'Tauotettu.', en: 'Paused.' },
+    audioStatusError: { fi: 'Äänen toisto epäonnistui.', en: 'Audio playback failed.' },
+    audioEmptyMessage: { fi: 'Tälle numerolle ei ole kuunneltavaa sisältöä.', en: 'This issue does not have audio content.' },
+    audioTimelineLabel: { fi: 'Kuuntelun eteneminen', en: 'Listening progress' }
   },
   navigation: [
     {

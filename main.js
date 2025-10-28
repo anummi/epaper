@@ -5,6 +5,8 @@ const minScale = 1;
 const scaleStep = 0.5;
 const articleBaseUrl = 'https://sandbox-devtest2.anygraaf.net/';
 const SETTINGS_STORAGE_KEY = 'epaper-settings';
+const AUDIO_PROGRESS_STORAGE_KEY = 'epaper-audio-progress';
+const AUDIO_PRODUCT_ID = 49;
 const SUPPORTED_LANGUAGES = {
   fi: 'fi-FI',
   en: 'en-US'
@@ -53,6 +55,19 @@ const state = {
   settings: {
     language: 'fi',
     darkMode: false
+  },
+  audio: {
+    queue: [],
+    currentIndex: -1,
+    isPlaying: false,
+    isLoading: false,
+    error: null,
+    resume: null,
+    resumePromptVisible: false,
+    lastSavedTime: 0,
+    audioElement: null,
+    playerVisible: false,
+    pendingSeekTime: null
   },
   dom: {}
 };
@@ -768,6 +783,109 @@ function buildLayout() {
   settingsPanel.appendChild(settingsDialog);
   shell.appendChild(settingsPanel);
 
+  const audioPlayer = document.createElement('section');
+  audioPlayer.className = 'audio-player';
+  audioPlayer.setAttribute('aria-hidden', 'true');
+
+  const audioHeader = document.createElement('div');
+  audioHeader.className = 'audio-player__header';
+  const audioInfo = document.createElement('div');
+  audioInfo.className = 'audio-player__info';
+
+  const audioPage = document.createElement('span');
+  audioPage.className = 'audio-player__page';
+  audioInfo.appendChild(audioPage);
+
+  const audioTitle = document.createElement('h3');
+  audioTitle.className = 'audio-player__title';
+  audioInfo.appendChild(audioTitle);
+
+  const audioClose = document.createElement('button');
+  audioClose.type = 'button';
+  audioClose.className = 'audio-player__close';
+  audioClose.textContent = '×';
+
+  audioHeader.appendChild(audioInfo);
+  audioHeader.appendChild(audioClose);
+  audioPlayer.appendChild(audioHeader);
+
+  const audioControls = document.createElement('div');
+  audioControls.className = 'audio-player__controls';
+
+  const audioPrev = document.createElement('button');
+  audioPrev.type = 'button';
+  audioPrev.className = 'audio-player__button audio-player__button--prev';
+  audioPrev.innerHTML = '<span aria-hidden="true">⏮</span>';
+
+  const audioPlay = document.createElement('button');
+  audioPlay.type = 'button';
+  audioPlay.className = 'audio-player__button audio-player__button--play';
+  audioPlay.innerHTML = '<span aria-hidden="true">▶</span>';
+
+  const audioNext = document.createElement('button');
+  audioNext.type = 'button';
+  audioNext.className = 'audio-player__button audio-player__button--next';
+  audioNext.innerHTML = '<span aria-hidden="true">⏭</span>';
+
+  audioControls.appendChild(audioPrev);
+  audioControls.appendChild(audioPlay);
+  audioControls.appendChild(audioNext);
+  audioPlayer.appendChild(audioControls);
+
+  const audioProgress = document.createElement('div');
+  audioProgress.className = 'audio-player__progress';
+  const audioTimeCurrent = document.createElement('span');
+  audioTimeCurrent.className = 'audio-player__time audio-player__time--current';
+  audioTimeCurrent.textContent = '0:00';
+  const audioTimeline = document.createElement('div');
+  audioTimeline.className = 'audio-player__timeline';
+  audioTimeline.setAttribute('role', 'slider');
+  audioTimeline.setAttribute('aria-valuemin', '0');
+  audioTimeline.setAttribute('aria-valuemax', '100');
+  audioTimeline.setAttribute('aria-valuenow', '0');
+  audioTimeline.tabIndex = 0;
+  const audioTimeTotal = document.createElement('span');
+  audioTimeTotal.className = 'audio-player__time audio-player__time--total';
+  audioTimeTotal.textContent = '0:00';
+  audioProgress.appendChild(audioTimeCurrent);
+  audioProgress.appendChild(audioTimeline);
+  audioProgress.appendChild(audioTimeTotal);
+  audioPlayer.appendChild(audioProgress);
+
+  const audioStatus = document.createElement('p');
+  audioStatus.className = 'audio-player__status';
+  audioStatus.hidden = true;
+  audioStatus.setAttribute('aria-live', 'polite');
+  audioPlayer.appendChild(audioStatus);
+
+  const audioResume = document.createElement('div');
+  audioResume.className = 'audio-player__resume';
+  audioResume.hidden = true;
+  audioResume.setAttribute('aria-hidden', 'true');
+  const audioResumeMessage = document.createElement('p');
+  audioResumeMessage.className = 'audio-player__resume-message';
+  const audioResumeActions = document.createElement('div');
+  audioResumeActions.className = 'audio-player__resume-actions';
+  const audioResumeContinue = document.createElement('button');
+  audioResumeContinue.type = 'button';
+  audioResumeContinue.className = 'audio-player__resume-button audio-player__resume-button--primary';
+  const audioResumeRestart = document.createElement('button');
+  audioResumeRestart.type = 'button';
+  audioResumeRestart.className = 'audio-player__resume-button audio-player__resume-button--secondary';
+  audioResumeActions.appendChild(audioResumeContinue);
+  audioResumeActions.appendChild(audioResumeRestart);
+  audioResume.appendChild(audioResumeMessage);
+  audioResume.appendChild(audioResumeActions);
+  audioPlayer.appendChild(audioResume);
+
+  shell.appendChild(audioPlayer);
+
+  const audioElement = new Audio();
+  audioElement.preload = 'auto';
+  audioElement.crossOrigin = 'anonymous';
+  state.audio.audioElement = audioElement;
+  bindAudioElementEvents(audioElement);
+
   state.dom = {
     shell,
     stage,
@@ -809,8 +927,25 @@ function buildLayout() {
     languageLabel: languageSpan,
     languageSelect,
     darkModeLabel: darkModeSpan,
-    darkModeToggle
+    darkModeToggle,
+    audioPlayer,
+    audioTitle,
+    audioPage,
+    audioClose,
+    audioPrev,
+    audioPlay,
+    audioNext,
+    audioTimeCurrent,
+    audioTimeTotal,
+    audioTimeline,
+    audioStatus,
+    audioResume,
+    audioResumeMessage,
+    audioResumeContinue,
+    audioResumeRestart
   };
+
+  updateAudioUI();
 }
 
 function applyTheme() {
@@ -906,6 +1041,7 @@ function refreshLocalizedTexts(options = {}) {
   if (state.currentAdId) {
     openAdById(state.currentAdId);
   }
+  updateAudioUI();
 }
 
 function applySettings(options = {}) {
@@ -1010,7 +1146,11 @@ function applyIssue(issue, options = {}) {
   const targetPageIndex = Number.isFinite(options.targetPageIndex)
     ? clamp(options.targetPageIndex, 0, Math.max(0, (issue.imagePaths?.length || 1) - 1))
     : 0;
-  
+
+  if (issue.path) {
+    state.currentIssuePath = normalizeArchivePath(issue.path);
+  }
+
   state.imagePaths = Array.isArray(issue.imagePaths) ? issue.imagePaths : [];
   state.pageMaps = Array.isArray(issue.pageMaps) ? issue.pageMaps : [];
   state.pageArticles = Array.isArray(issue.pageArticles) ? issue.pageArticles : [];
@@ -1020,6 +1160,7 @@ function applyIssue(issue, options = {}) {
   state.articleOrder = state.pageArticles
     .map(article => String(article.id))
     .filter(id => Boolean(id));
+  prepareAudioForIssue();
   state.currentArticleId = null;
   state.currentAdId = null;
   state.adLookup = new Map();
@@ -1043,9 +1184,6 @@ function applyIssue(issue, options = {}) {
   state.viewBox = computeViewBox(issue.res);
   if (Array.isArray(issue.archiveItems) && issue.archiveItems.length) {
     state.archiveItems = issue.archiveItems;
-  }
-  if (issue.path) {
-    state.currentIssuePath = normalizeArchivePath(issue.path);
   }
   state.dom.readingWindow?.classList.remove('reading-window--ad');
   state.activePageIndex = targetPageIndex;
@@ -1172,6 +1310,9 @@ function handleNavigationAction(action) {
     case 'ads':
       openAdsPanel();
       break;
+    case 'audio':
+      handleAudioAction();
+      break;
     case 'archive':
       openArchivePanel();
       break;
@@ -1226,7 +1367,14 @@ function attachGlobalListeners() {
     settingsPanel,
     settingsClose,
     languageSelect,
-    darkModeToggle
+    darkModeToggle,
+    audioClose,
+    audioPrev,
+    audioPlay,
+    audioNext,
+    audioTimeline,
+    audioResumeContinue,
+    audioResumeRestart
   } = state.dom;
 
   navPrev?.addEventListener('click', () => gotoSlide(state.currentSlide - 1));
@@ -1277,6 +1425,15 @@ function attachGlobalListeners() {
 
   languageSelect?.addEventListener('change', handleLanguageChange);
   darkModeToggle?.addEventListener('change', handleDarkModeChange);
+
+  audioClose?.addEventListener('click', () => stopAudioPlayback());
+  audioPrev?.addEventListener('click', () => skipAudio(-1));
+  audioNext?.addEventListener('click', () => skipAudio(1));
+  audioPlay?.addEventListener('click', toggleAudioPlayback);
+  audioTimeline?.addEventListener('click', handleAudioTimelineClick);
+  audioTimeline?.addEventListener('keydown', handleAudioTimelineKeydown);
+  audioResumeContinue?.addEventListener('click', handleAudioResumeContinue);
+  audioResumeRestart?.addEventListener('click', handleAudioResumeRestart);
 
   stage?.addEventListener('pointerdown', handleStagePointerDown);
   stage?.addEventListener('pointermove', movePan);
@@ -1817,22 +1974,571 @@ function sizeAdsPanelItems() {
     return;
   }
   const cards = grid.querySelectorAll('.ads-card');
-  if (!cards.length) {
+  cards.forEach(card => card.style.removeProperty('grid-row-end'));
+}
+
+function bindAudioElementEvents(audio) {
+  if (!audio) {
     return;
   }
-  const styles = getComputedStyle(grid);
-  const rowHeight = Number.parseFloat(styles.getPropertyValue('--ads-grid-row-height')) || 12;
-  const gapValue = styles.rowGap || styles.gridRowGap || '0';
-  const rowGap = Number.parseFloat(gapValue) || 0;
-  cards.forEach(card => {
-    card.style.removeProperty('grid-row-end');
-    const rect = card.getBoundingClientRect();
-    if (!rect.height) {
+  audio.addEventListener('play', () => {
+    state.audio.isPlaying = true;
+    state.audio.isLoading = false;
+    state.audio.error = null;
+    updateAudioUI();
+  });
+  audio.addEventListener('pause', () => {
+    state.audio.isPlaying = false;
+    updateAudioUI();
+    saveAudioProgressSnapshot();
+  });
+  audio.addEventListener('timeupdate', handleAudioTimeUpdate);
+  audio.addEventListener('ended', handleAudioEnded);
+  audio.addEventListener('waiting', () => {
+    state.audio.isLoading = true;
+    updateAudioUI();
+  });
+  audio.addEventListener('canplay', () => {
+    state.audio.isLoading = false;
+    updateAudioUI();
+  });
+  audio.addEventListener('loadedmetadata', handleAudioLoadedMetadata);
+  audio.addEventListener('error', handleAudioError);
+}
+
+function handleAudioLoadedMetadata() {
+  const audio = state.audio.audioElement;
+  if (!audio) {
+    return;
+  }
+  const seekTime = state.audio.pendingSeekTime;
+  if (typeof seekTime === 'number' && Number.isFinite(seekTime)) {
+    try {
+      audio.currentTime = clamp(seekTime, 0, Math.max(audio.duration || 0, 0));
+    } catch (error) {
+      console.warn('Ääniraidan kohdan palauttaminen epäonnistui:', error);
+    }
+  }
+  state.audio.pendingSeekTime = null;
+  updateAudioUI();
+}
+
+function handleAudioTimeUpdate() {
+  const audio = state.audio.audioElement;
+  if (!audio) {
+    return;
+  }
+  updateAudioUI();
+  const now = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  if (!state.audio.isPlaying) {
+    return;
+  }
+  if (Math.abs(now - state.audio.lastSavedTime) >= 5) {
+    state.audio.lastSavedTime = now;
+    saveAudioProgressSnapshot();
+  }
+}
+
+function handleAudioEnded() {
+  saveAudioProgressSnapshot();
+  const nextIndex = state.audio.currentIndex + 1;
+  if (nextIndex < state.audio.queue.length) {
+    startAudioFromIndex(nextIndex);
+    return;
+  }
+  clearAudioProgressForCurrentIssue();
+  const audio = state.audio.audioElement;
+  if (audio) {
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+  }
+  state.audio.currentIndex = -1;
+  state.audio.isPlaying = false;
+  state.audio.isLoading = false;
+  state.audio.error = null;
+  updateAudioUI();
+}
+
+function handleAudioError() {
+  const audio = state.audio.audioElement;
+  state.audio.error = audio?.error || new Error('Audio error');
+  state.audio.isLoading = false;
+  state.audio.isPlaying = false;
+  updateAudioUI();
+}
+
+function showAudioPlayer() {
+  state.audio.playerVisible = true;
+  updateAudioUI();
+}
+
+function hideAudioPlayer() {
+  state.audio.playerVisible = false;
+  updateAudioUI();
+}
+
+function toggleAudioPlayback() {
+  if (!state.audio.queue.length) {
+    return;
+  }
+  if (state.audio.currentIndex === -1) {
+    startAudioFromIndex(0);
+    return;
+  }
+  if (state.audio.isPlaying) {
+    pauseAudioPlayback();
+  } else {
+    playAudioPlayback();
+  }
+}
+
+function playAudioPlayback() {
+  const audio = state.audio.audioElement;
+  if (!audio) {
+    return;
+  }
+  const playPromise = audio.play();
+  if (playPromise && typeof playPromise.catch === 'function') {
+    playPromise.catch(error => {
+      state.audio.error = error;
+      updateAudioUI();
+    });
+  }
+}
+
+function pauseAudioPlayback() {
+  const audio = state.audio.audioElement;
+  if (!audio) {
+    return;
+  }
+  audio.pause();
+}
+
+function handleAudioAction() {
+  if (!state.audio.queue.length) {
+    state.audio.playerVisible = true;
+    updateAudioUI();
+    return;
+  }
+  showAudioPlayer();
+  if (state.audio.currentIndex === -1 && state.audio.resume && !state.audio.resumePromptVisible) {
+    showAudioResumePrompt();
+    return;
+  }
+  toggleAudioPlayback();
+}
+
+function startAudioFromIndex(index, options = {}) {
+  const queue = state.audio.queue;
+  if (!queue.length) {
+    return;
+  }
+  const targetIndex = clamp(index, 0, queue.length - 1);
+  const entry = queue[targetIndex];
+  const audio = state.audio.audioElement;
+  if (!entry || !audio) {
+    return;
+  }
+  state.audio.currentIndex = targetIndex;
+  state.audio.isLoading = true;
+  state.audio.error = null;
+  state.audio.pendingSeekTime = typeof options.resumeTime === 'number' ? options.resumeTime : null;
+  state.audio.lastSavedTime = 0;
+  hideAudioResumePrompt();
+  focusPageForArticle(entry.id, { keepReadingOpen: false });
+  showAudioPlayer();
+  try {
+    audio.pause();
+    audio.src = entry.src;
+    audio.load();
+  } catch (error) {
+    state.audio.error = error;
+    state.audio.isLoading = false;
+  }
+  updateAudioUI();
+  playAudioPlayback();
+}
+
+function skipAudio(step) {
+  if (!Number.isInteger(step) || !state.audio.queue.length) {
+    return;
+  }
+  const nextIndex = state.audio.currentIndex + step;
+  if (nextIndex < 0 || nextIndex >= state.audio.queue.length) {
+    return;
+  }
+  startAudioFromIndex(nextIndex);
+}
+
+function stopAudioPlayback(options = {}) {
+  const { hidePlayer: hide = true } = options;
+  const audio = state.audio.audioElement;
+  if (audio) {
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+  }
+  state.audio.currentIndex = -1;
+  state.audio.isPlaying = false;
+  state.audio.isLoading = false;
+  state.audio.error = null;
+  state.audio.pendingSeekTime = null;
+  hideAudioResumePrompt();
+  if (hide) {
+    hideAudioPlayer();
+  } else {
+    updateAudioUI();
+  }
+}
+
+function showAudioResumePrompt() {
+  if (!state.audio.resume) {
+    return;
+  }
+  state.audio.resumePromptVisible = true;
+  updateAudioUI();
+}
+
+function hideAudioResumePrompt() {
+  state.audio.resumePromptVisible = false;
+  const resume = state.dom.audioResume;
+  if (resume) {
+    resume.hidden = true;
+    resume.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function handleAudioResumeContinue() {
+  if (!state.audio.resume) {
+    return;
+  }
+  const { index, time } = state.audio.resume;
+  state.audio.resume = null;
+  startAudioFromIndex(Number.isInteger(index) ? index : 0, { resumeTime: time || 0 });
+}
+
+function handleAudioResumeRestart() {
+  clearAudioProgressForCurrentIssue();
+  state.audio.resume = null;
+  hideAudioResumePrompt();
+  startAudioFromIndex(0);
+}
+
+function handleAudioTimelineClick(event) {
+  const timeline = state.dom.audioTimeline;
+  const audio = state.audio.audioElement;
+  if (!timeline || !audio || !Number.isFinite(audio.duration) || audio.duration <= 0) {
+    return;
+  }
+  const rect = timeline.getBoundingClientRect();
+  const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
+  const clamped = clamp(ratio, 0, 1);
+  audio.currentTime = clamped * audio.duration;
+  updateAudioUI();
+}
+
+function handleAudioTimelineKeydown(event) {
+  const audio = state.audio.audioElement;
+  if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) {
+    return;
+  }
+  let handled = false;
+  let newTime = audio.currentTime || 0;
+  switch (event.key) {
+    case 'ArrowLeft':
+      newTime -= 5;
+      handled = true;
+      break;
+    case 'ArrowRight':
+      newTime += 5;
+      handled = true;
+      break;
+    case 'Home':
+      newTime = 0;
+      handled = true;
+      break;
+    case 'End':
+      newTime = audio.duration;
+      handled = true;
+      break;
+    default:
+      break;
+  }
+  if (!handled) {
+    return;
+  }
+  event.preventDefault();
+  audio.currentTime = clamp(newTime, 0, audio.duration);
+  updateAudioUI();
+}
+
+function updateAudioUI() {
+  const {
+    audioPlayer,
+    audioTitle,
+    audioPage,
+    audioClose,
+    audioPrev,
+    audioPlay,
+    audioNext,
+    audioTimeCurrent,
+    audioTimeTotal,
+    audioTimeline,
+    audioStatus,
+    audioResume,
+    audioResumeMessage,
+    audioResumeContinue,
+    audioResumeRestart
+  } = state.dom;
+  const queue = state.audio.queue;
+  const entry = getCurrentAudioEntry();
+  const audio = state.audio.audioElement;
+
+  if (audioPlayer) {
+    audioPlayer.classList.toggle('is-visible', state.audio.playerVisible);
+    audioPlayer.setAttribute('aria-hidden', state.audio.playerVisible ? 'false' : 'true');
+  }
+
+  if (audioTitle) {
+    const fallbackTitle = resolveLabel('audioPlayerTitle', 'Kuuntele lehti');
+    audioTitle.textContent = entry?.title || fallbackTitle;
+  }
+
+  if (audioPage) {
+    if (entry?.pageNumber) {
+      audioPage.hidden = false;
+      audioPage.textContent = `${resolveLabel('audioPageLabel', 'Sivu')} ${entry.pageNumber}`;
+    } else {
+      audioPage.textContent = '';
+      audioPage.hidden = true;
+    }
+  }
+
+  if (audioClose) {
+    audioClose.setAttribute('aria-label', resolveLabel('audioCloseLabel', 'Sulje kuuntelu'));
+  }
+
+  if (audioPlay) {
+    audioPlay.disabled = !queue.length || state.audio.resumePromptVisible;
+    const playing = state.audio.isPlaying;
+    audioPlay.innerHTML = playing
+      ? '<span aria-hidden="true">❚❚</span>'
+      : '<span aria-hidden="true">▶</span>';
+    audioPlay.setAttribute('aria-label', playing
+      ? resolveLabel('audioPauseLabel', 'Tauota')
+      : resolveLabel('audioPlayLabel', 'Toista'));
+  }
+
+  if (audioPrev) {
+    audioPrev.disabled = !(queue.length && state.audio.currentIndex > 0);
+    audioPrev.setAttribute('aria-label', resolveLabel('audioPrevLabel', 'Edellinen juttu'));
+  }
+
+  if (audioNext) {
+    audioNext.disabled = !(queue.length && state.audio.currentIndex >= 0 && state.audio.currentIndex < queue.length - 1);
+    audioNext.setAttribute('aria-label', resolveLabel('audioNextLabel', 'Seuraava juttu'));
+  }
+
+  const currentTime = audio && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  const duration = audio && Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+
+  if (audioTimeCurrent) {
+    audioTimeCurrent.textContent = formatTime(currentTime);
+  }
+  if (audioTimeTotal) {
+    audioTimeTotal.textContent = formatTime(duration);
+  }
+  if (audioTimeline) {
+    const progress = duration > 0 ? clamp(currentTime / duration, 0, 1) : 0;
+    audioTimeline.style.setProperty('--progress', String(progress));
+    audioTimeline.setAttribute('aria-valuenow', String(Math.round(progress * 100)));
+    audioTimeline.setAttribute('aria-valuetext', `${formatTime(currentTime)} / ${formatTime(duration)}`);
+    audioTimeline.setAttribute('aria-label', resolveLabel('audioTimelineLabel', 'Kuuntelun eteneminen'));
+    audioTimeline.tabIndex = queue.length ? 0 : -1;
+  }
+
+  if (audioStatus) {
+    let message = '';
+    if (!queue.length) {
+      message = resolveLabel('audioEmptyMessage', 'Tälle numerolle ei ole kuunneltavaa sisältöä.');
+    } else if (state.audio.error) {
+      message = resolveLabel('audioStatusError', 'Äänen toisto epäonnistui.');
+    } else if (state.audio.isLoading) {
+      message = resolveLabel('audioStatusLoading', 'Yhdistetään ääneen…');
+    } else if (state.audio.isPlaying) {
+      message = resolveLabel('audioStatusPlaying', 'Toistetaan.');
+    } else if (state.audio.currentIndex >= 0) {
+      message = resolveLabel('audioStatusPaused', 'Tauotettu.');
+    } else {
+      message = resolveLabel('audioStatusIdle', 'Valmis kuunneltavaksi.');
+    }
+    audioStatus.hidden = !message;
+    audioStatus.textContent = message;
+  }
+
+  if (audioResume && audioResumeMessage && audioResumeContinue && audioResumeRestart) {
+    const showResume = Boolean(state.audio.resumePromptVisible && state.audio.resume);
+    audioResume.hidden = !showResume;
+    audioResume.setAttribute('aria-hidden', showResume ? 'false' : 'true');
+    audioResumeContinue.textContent = resolveLabel('audioResumeContinue', 'Jatka kuuntelua');
+    audioResumeRestart.textContent = resolveLabel('audioResumeRestart', 'Aloita alusta');
+    if (showResume) {
+      const resumeEntry = state.audio.resume?.index != null ? queue[state.audio.resume.index] : null;
+      const resumeTitle = resumeEntry?.title || resolveLabel('audioResumeFallbackTitle', 'Viimeisin kuunneltu juttu');
+      const template = resolveLabel('audioResumePrompt', 'Jatketaanko kohdasta "{title}" vai aloitetaan alusta?');
+      audioResumeMessage.textContent = template.replace('{title}', resumeTitle);
+    }
+  }
+}
+
+function formatTime(seconds) {
+  const totalSeconds = Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds) : 0;
+  const minutes = Math.floor(totalSeconds / 60);
+  const remaining = Math.max(totalSeconds - minutes * 60, 0);
+  return `${minutes}:${String(remaining).padStart(2, '0')}`;
+}
+
+function getCurrentAudioEntry() {
+  if (state.audio.currentIndex < 0) {
+    return null;
+  }
+  return state.audio.queue[state.audio.currentIndex] || null;
+}
+
+function getAudioProgressStore() {
+  try {
+    const raw = window.localStorage?.getItem(AUDIO_PROGRESS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    console.warn('Kuuntelun etenemisen lukeminen epäonnistui:', error);
+    return {};
+  }
+}
+
+function setAudioProgressStore(store) {
+  try {
+    window.localStorage?.setItem(AUDIO_PROGRESS_STORAGE_KEY, JSON.stringify(store));
+  } catch (error) {
+    console.warn('Kuuntelun etenemisen tallentaminen epäonnistui:', error);
+  }
+}
+
+function getCurrentIssueAudioKey() {
+  const path = state.currentIssuePath ? normalizeArchivePath(state.currentIssuePath) : '';
+  return path || 'latest';
+}
+
+function saveAudioProgressSnapshot() {
+  const entry = getCurrentAudioEntry();
+  const audio = state.audio.audioElement;
+  if (!entry || !audio) {
+    return;
+  }
+  const time = Number.isFinite(audio.currentTime) ? Math.max(0, Math.round(audio.currentTime)) : 0;
+  const payload = {
+    articleId: entry.id,
+    time
+  };
+  const store = getAudioProgressStore();
+  store[getCurrentIssueAudioKey()] = payload;
+  setAudioProgressStore(store);
+  state.audio.resume = {
+    index: state.audio.currentIndex,
+    articleId: entry.id,
+    time
+  };
+}
+
+function clearAudioProgressForCurrentIssue() {
+  const store = getAudioProgressStore();
+  const key = getCurrentIssueAudioKey();
+  if (Object.prototype.hasOwnProperty.call(store, key)) {
+    delete store[key];
+    setAudioProgressStore(store);
+  }
+  state.audio.resume = null;
+  state.audio.lastSavedTime = 0;
+}
+
+function loadAudioProgressForCurrentIssue() {
+  const store = getAudioProgressStore();
+  const key = getCurrentIssueAudioKey();
+  const entry = store[key];
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const articleId = entry.articleId != null ? String(entry.articleId) : null;
+  const time = Number.isFinite(entry.time) ? Math.max(0, Number(entry.time)) : 0;
+  if (!articleId) {
+    return null;
+  }
+  return { articleId, time };
+}
+
+function buildArticleAudioUrl(article) {
+  if (!article || article.id == null || !article.hash) {
+    return null;
+  }
+  const base = (state.config?.articleBaseUrl || articleBaseUrl || '').replace(/\/?$/, '/');
+  const siteId = state.config?.id;
+  if (!siteId) {
+    return null;
+  }
+  return `${base}neodirect/${AUDIO_PRODUCT_ID}/${article.id}?hash=${article.hash}&site=${siteId}&role=1`;
+}
+
+function prepareAudioForIssue() {
+  stopAudioPlayback();
+  const order = Array.isArray(state.articleOrder) ? state.articleOrder : [];
+  const queue = [];
+  order.forEach(id => {
+    const article = state.articleLookup.get(id);
+    const src = buildArticleAudioUrl(article);
+    if (!article || !src) {
       return;
     }
-    const span = Math.max(1, Math.ceil((rect.height + rowGap) / (rowHeight + rowGap)));
-    card.style.gridRowEnd = `span ${span}`;
+    const pageIndex = state.articlePageLookup.get(id);
+    const pageNumber = Number.isFinite(article.p) ? Number(article.p) : (Number.isInteger(pageIndex) ? pageIndex + 1 : null);
+    queue.push({
+      id,
+      title: article.hl || '',
+      pageIndex: Number.isInteger(pageIndex) ? pageIndex : null,
+      pageNumber,
+      src
+    });
   });
+  state.audio.queue = queue;
+  state.audio.currentIndex = -1;
+  state.audio.isPlaying = false;
+  state.audio.isLoading = false;
+  state.audio.error = null;
+  state.audio.pendingSeekTime = null;
+  state.audio.resumePromptVisible = false;
+  const saved = loadAudioProgressForCurrentIssue();
+  if (saved) {
+    const resumeIndex = queue.findIndex(item => item.id === saved.articleId);
+    if (resumeIndex !== -1) {
+      state.audio.resume = {
+        index: resumeIndex,
+        articleId: saved.articleId,
+        time: saved.time
+      };
+    } else {
+      state.audio.resume = null;
+    }
+  } else {
+    state.audio.resume = null;
+  }
+  if (!queue.length) {
+    clearAudioProgressForCurrentIssue();
+    hideAudioPlayer();
+  }
+  updateAudioUI();
 }
 
 async function loadIssueData(config, issuePath) {

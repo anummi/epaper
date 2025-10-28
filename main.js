@@ -1648,7 +1648,6 @@ function createAdHotspot(pageIndex, mapItem, ad) {
   hotspot.appendChild(actions);
 
   hotspot.addEventListener('pointerenter', () => activateAdHotspot(hotspot));
-  hotspot.addEventListener('pointerleave', () => deactivateAdHotspot(hotspot));
   hotspot.addEventListener('click', event => {
     if (event.target.closest('.ad-hotspot__actions')) {
       return;

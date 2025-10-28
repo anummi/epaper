@@ -882,6 +882,9 @@ body.theme-dark .reading-backdrop {
   opacity: 1;
   pointer-events: auto;
 }
+aside.ads-panel:not(.is-open) {
+  z-index: -1 !important;
+}
 
 .ads-panel__dialog {
   width: min(1200px, 95vw);

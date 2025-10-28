@@ -1134,6 +1134,19 @@ function updateLocation() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+  const grid = document.querySelector('.ads-panel__grid');
+  if (!grid) return;
+
+  imagesLoaded(grid, function() {
+    new Masonry(grid, {
+      itemSelector: '.ads-card',
+      percentPosition: true,
+      gutter: 10
+    });
+  });
+});
+
 
 async function init() {
   state.config = window.epaperConfig;

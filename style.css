@@ -71,6 +71,15 @@ body.menu-collapsed {
   --menu-width: var(--menu-collapsed-width);
   --menu-padding: var(--menu-width);
 }
+
+body.is-fullscreen button.menu-item.menu-fullscreen {
+    display: none;
+}
+
+body:not(.is-fullscreen) button.menu-item.menu-windowed {
+    display: none;
+}
+
 #app-root {
     width: 100%;
 }
@@ -240,6 +249,7 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
 .page-slide.is-active {
   opacity: 1;
   pointer-events: auto;
+  z-index: 10;
 }
 
 .page-surface {

@@ -1823,6 +1823,16 @@ function getAdsPanelGutter(grid) {
   return DEFAULT_ADS_PANEL_GUTTER;
 }
 
+function getAdsPanelColumnCount() {
+  if (window.matchMedia?.('(max-width: 640px)').matches) {
+    return 1;
+  }
+  if (window.matchMedia?.('(max-width: 1024px)').matches) {
+    return 2;
+  }
+  return 3;
+}
+
 function destroyAdsPanelLayout() {
   if (adsMasonryInstance) {
     adsMasonryInstance.destroy();
@@ -1853,6 +1863,23 @@ function refreshAdsPanelLayout() {
   }
 
   const gutter = getAdsPanelGutter(grid);
+  const columns = Math.max(getAdsPanelColumnCount(), 1);
+  const gridWidth = grid.clientWidth;
+
+  if (gridWidth <= 0) {
+    return;
+  }
+
+  const availableWidth = Math.max(gridWidth - gutter * (columns - 1), 0);
+  const itemWidth = columns === 1 ? gridWidth : availableWidth / columns;
+
+  cards.forEach(card => {
+    card.style.width = `${itemWidth}px`;
+    card.style.marginBottom = `${gutter}px`;
+  });
+
+  grid.style.setProperty('--ads-panel-columns', String(columns));
+  grid.style.setProperty('--ads-panel-item-width', `${itemWidth}px`);
   const rawGutter = adsMasonryInstance?.options?.gutter;
   const currentGutter = typeof rawGutter === 'number' && Number.isFinite(rawGutter)
     ? rawGutter
@@ -1867,13 +1894,16 @@ function refreshAdsPanelLayout() {
   if (!adsMasonryInstance) {
     adsMasonryInstance = new Masonry(grid, {
       itemSelector: '.ads-card',
-      percentPosition: true,
-      gutter
+      gutter,
+      columnWidth: itemWidth,
+      horizontalOrder: true
     });
     createdInstance = true;
   } else {
     adsMasonryInstance.options.gutter = gutter;
+    adsMasonryInstance.options.columnWidth = itemWidth;
     adsMasonryInstance.gutter = gutter;
+    adsMasonryInstance.columnWidth = itemWidth;
     adsMasonryInstance.reloadItems();
   }
 

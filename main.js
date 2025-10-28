@@ -23,6 +23,8 @@ const state = {
   slides: [],
   currentSlide: 0,
   activePageIndex: 0,
+  articleOrder: [],
+  currentArticleId: null,
   orientation: null,
   isCompact: false,
   viewBox: null,
@@ -260,13 +262,40 @@ function buildLayout() {
   readingWindow.setAttribute('aria-hidden', 'true');
   const readingHeader = document.createElement('div');
   readingHeader.className = 'reading-window__header';
-  const readingTitle = document.createElement('h2');
-  readingHeader.appendChild(readingTitle);
+
+  const readingToolbar = document.createElement('div');
+  readingToolbar.className = 'reading-window__toolbar';
+  const readingLabel = document.createElement('span');
+  readingLabel.className = 'reading-window__label';
+  readingToolbar.appendChild(readingLabel);
+
+  const readingControls = document.createElement('div');
+  readingControls.className = 'reading-window__controls';
+
+  const readingPrev = document.createElement('button');
+  readingPrev.type = 'button';
+  readingPrev.className = 'reading-window__nav-button reading-window__nav-button--prev';
+  readingPrev.innerHTML = '<span aria-hidden="true">←</span>';
+  readingControls.appendChild(readingPrev);
+
+  const readingNext = document.createElement('button');
+  readingNext.type = 'button';
+  readingNext.className = 'reading-window__nav-button reading-window__nav-button--next';
+  readingNext.innerHTML = '<span aria-hidden="true">→</span>';
+  readingControls.appendChild(readingNext);
+
   const readingClose = document.createElement('button');
   readingClose.type = 'button';
   readingClose.className = 'close-article';
   readingClose.textContent = '×';
-  readingHeader.appendChild(readingClose);
+  readingControls.appendChild(readingClose);
+
+  readingToolbar.appendChild(readingControls);
+  readingHeader.appendChild(readingToolbar);
+
+  const readingTitle = document.createElement('h2');
+  readingTitle.className = 'reading-window__title';
+  readingHeader.appendChild(readingTitle);
   const readingContent = document.createElement('div');
   readingContent.id = 'article-content';
   readingContent.className = 'reading-window__content';
@@ -348,6 +377,9 @@ function buildLayout() {
     archiveList,
     readingBackdrop,
     readingWindow,
+    readingLabel,
+    readingPrev,
+    readingNext,
     readingTitle,
     readingClose,
     readingContent,
@@ -406,6 +438,7 @@ function refreshLocalizedTexts(options = {}) {
     dom.readingTitle.textContent = resolveLabel('readingTitle', 'Artikkeli');
   }
   dom.readingClose?.setAttribute('aria-label', resolveLabel('closeArticle', 'Sulje artikkeli'));
+  updateReadingNavigation();
 
   if (dom.settingsTitle) {
     dom.settingsTitle.textContent = resolveLabel('settingsTitle', 'Asetukset');
@@ -533,6 +566,10 @@ function applyIssue(issue, options = {}) {
   state.pageMaps = Array.isArray(issue.pageMaps) ? issue.pageMaps : [];
   state.pageArticles = Array.isArray(issue.pageArticles) ? issue.pageArticles : [];
   state.articleLookup = new Map(state.pageArticles.map(article => [String(article.id), article]));
+  state.articleOrder = state.pageArticles
+    .map(article => String(article.id))
+    .filter(id => Boolean(id));
+  state.currentArticleId = null;
   state.viewBox = computeViewBox(issue.res);
   if (Array.isArray(issue.archiveItems) && issue.archiveItems.length) {
     state.archiveItems = issue.archiveItems;
@@ -555,6 +592,7 @@ function applyIssue(issue, options = {}) {
   document.title = issue.label
     ? `${issue.label} – ${state.config.paper}`
     : state.config.paper;
+  updateReadingNavigation();
 }
 
 function buildNavigation() {
@@ -666,6 +704,8 @@ function attachGlobalListeners() {
     allPagesClose,
     archivePanel,
     archiveClose,
+    readingPrev,
+    readingNext,
     readingClose,
     readingBackdrop,
     settingsPanel,
@@ -695,6 +735,8 @@ function attachGlobalListeners() {
     }
   });
 
+  readingPrev?.addEventListener('click', () => gotoAdjacentArticle(-1));
+  readingNext?.addEventListener('click', () => gotoAdjacentArticle(1));
   readingClose?.addEventListener('click', closeReadingWindow);
   readingBackdrop?.addEventListener('click', closeReadingWindow);
 
@@ -760,12 +802,26 @@ function handleKeydown(event) {
       return;
     }
   }
-  
+
+  const isReadingOpen = state.dom.readingWindow?.classList.contains('is-open');
+  if (isReadingOpen) {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      gotoAdjacentArticle(1);
+      return;
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      gotoAdjacentArticle(-1);
+      return;
+    }
+  }
+
   if (document.body.classList.contains('is-zoomed')) {
     return;
   }
 
-if (event.key === 'ArrowRight') {
+  if (event.key === 'ArrowRight') {
     gotoSlide(state.currentSlide + 1);
   } else if (event.key === 'ArrowLeft') {
     gotoSlide(state.currentSlide - 1);
@@ -810,6 +866,87 @@ function updateFullscreenUI() {
     const exitLabel = resolveLabel('windowedLabel', 'Sulje koko näyttö');
     exitFullscreenButton.setAttribute('aria-label', exitLabel);
     exitFullscreenButton.title = exitLabel;
+  }
+}
+
+function setArticleNavButton(button, targetId, label) {
+  if (!button) {
+    return;
+  }
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  if (targetId) {
+    button.disabled = false;
+    button.dataset.targetArticle = targetId;
+    button.setAttribute('aria-disabled', 'false');
+  } else {
+    button.disabled = true;
+    delete button.dataset.targetArticle;
+    button.setAttribute('aria-disabled', 'true');
+  }
+}
+
+function updateReadingNavigation() {
+  const { readingLabel, readingPrev, readingNext } = state.dom || {};
+  if (readingLabel) {
+    readingLabel.textContent = resolveLabel('readingWindowTitle', 'Lukuikkuna');
+  }
+
+  const prevLabel = resolveLabel('prevArticle', 'Edellinen juttu');
+  const nextLabel = resolveLabel('nextArticle', 'Seuraava juttu');
+
+  const order = Array.isArray(state.articleOrder) ? state.articleOrder : [];
+  const currentId = state.currentArticleId ? String(state.currentArticleId) : null;
+  const currentIndex = currentId ? order.indexOf(currentId) : -1;
+
+  const prevId = currentIndex > 0 ? order[currentIndex - 1] : null;
+  const nextId = currentIndex !== -1 && currentIndex < order.length - 1 ? order[currentIndex + 1] : null;
+
+  setArticleNavButton(readingPrev, prevId, prevLabel);
+  setArticleNavButton(readingNext, nextId, nextLabel);
+}
+
+function gotoAdjacentArticle(step) {
+  if (!Number.isInteger(step) || step === 0) {
+    return;
+  }
+  const order = Array.isArray(state.articleOrder) ? state.articleOrder : [];
+  const currentId = state.currentArticleId ? String(state.currentArticleId) : null;
+  if (!currentId || !order.length) {
+    return;
+  }
+  const currentIndex = order.indexOf(currentId);
+  if (currentIndex === -1) {
+    return;
+  }
+  const targetIndex = currentIndex + step;
+  if (targetIndex < 0 || targetIndex >= order.length) {
+    return;
+  }
+  const targetId = order[targetIndex];
+  if (targetId) {
+    openArticleById(targetId);
+  }
+}
+
+function openArticleById(articleId) {
+  if (!articleId) {
+    return;
+  }
+  const id = String(articleId);
+  const article = state.articleLookup.get(id);
+  if (!article) {
+    console.warn('Artikkelia ei löytynyt arkistosta:', articleId);
+    return;
+  }
+  const heading = state.dom.readingTitle;
+  if (heading) {
+    heading.textContent = article.hl || resolveLabel('readingTitle', 'Artikkeli');
+  }
+  state.currentArticleId = id;
+  updateReadingNavigation();
+  if (article.url) {
+    loadArticleContent(article.url);
   }
 }
 
@@ -1008,6 +1145,24 @@ function createSlide(pages) {
 
   const surface = document.createElement('div');
   surface.className = 'page-surface';
+  const ratio = state.viewBox && state.viewBox.width && state.viewBox.height
+    ? state.viewBox.width / state.viewBox.height
+    : 0.75;
+  const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 0.75;
+  surface.style.setProperty('--page-ratio', String(safeRatio));
+
+  const shouldOffsetFirstPage = pages.length === 1
+    && pages[0] === 0
+    && state.orientation === 'landscape'
+    && !state.isCompact
+    && state.imagePaths.length > 1;
+  if (shouldOffsetFirstPage) {
+    surface.classList.add('page-surface--offset');
+    const placeholder = document.createElement('div');
+    placeholder.className = 'page-image page-image--empty';
+    placeholder.setAttribute('aria-hidden', 'true');
+    surface.appendChild(placeholder);
+  }
 
   pages.forEach(pageIndex => {
     const wrapper = document.createElement('div');
@@ -1105,16 +1260,15 @@ function handleRectClick(event) {
     return;
   }
   const target = event.currentTarget;
-  const url = target.dataset.url;
   const articleId = target.dataset.articleId;
   if (articleId) {
-    const article = state.articleLookup.get(String(articleId));
-    const heading = state.dom.readingTitle;
-    if (heading) {
-      heading.textContent = article?.hl || resolveLabel('readingTitle', 'Artikkeli');
-    }
+    openArticleById(articleId);
+    return;
   }
+  const url = target.dataset.url;
   if (url) {
+    state.currentArticleId = null;
+    updateReadingNavigation();
     loadArticleContent(url);
   }
 }
@@ -1426,18 +1580,31 @@ function buildAllPagesGrid() {
   }
   grid.innerHTML = '';
   const spreads = buildSpreadDefinitions();
+  const ratio = state.viewBox && state.viewBox.width && state.viewBox.height
+    ? state.viewBox.width / state.viewBox.height
+    : 0.75;
+  const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 0.75;
   spreads.forEach(pages => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'all-pages__page';
     button.dataset.pages = pages.join(',');
-    button.dataset.pageCount = String(pages.length);
+    const shouldOffsetFirstPage = pages.length === 1 && pages[0] === 0 && state.imagePaths.length > 1;
+    const sizingCount = shouldOffsetFirstPage ? pages.length + 1 : pages.length;
+    button.dataset.pageCount = String(sizingCount);
     if (pages.length > 1) {
       button.classList.add('all-pages__page--spread');
     }
 
     const preview = document.createElement('div');
     preview.className = 'all-pages__preview';
+    preview.style.setProperty('--page-ratio', String(safeRatio));
+    if (shouldOffsetFirstPage) {
+      const placeholder = document.createElement('div');
+      placeholder.className = 'all-pages__placeholder';
+      placeholder.setAttribute('aria-hidden', 'true');
+      preview.appendChild(placeholder);
+    }
     pages.forEach(pageIndex => {
       const img = document.createElement('img');
       img.src = state.imagePaths[pageIndex];
@@ -1514,12 +1681,16 @@ function buildArchiveList() {
     title.textContent = formatArchiveDate(entry.d) || entry.d || entry.p;
     info.appendChild(title);
     if (entry.p) {
-      meta.className = 'archive-panel__path';
       const meta = document.createElement('small');
+      meta.className = 'archive-panel__path';
       meta.textContent = entry.p.replace(/\/$/, '');
       info.appendChild(meta);
     }
     button.appendChild(info);
+    const accessibleLabel = title.textContent || entry.p || '';
+    if (accessibleLabel) {
+      button.setAttribute('aria-label', accessibleLabel);
+    }
 
     button.addEventListener('click', () => handleArchiveSelection(entryPath));
     item.appendChild(button);
@@ -1690,6 +1861,8 @@ function closeReadingWindow() {
     readingBackdrop.classList.remove('is-visible');
     readingBackdrop.setAttribute('aria-hidden', 'true');
   }
+  state.currentArticleId = null;
+  updateReadingNavigation();
   if (state.dom.readingTitle) {
     state.dom.readingTitle.textContent = resolveLabel('readingTitle', 'Artikkeli');
   }

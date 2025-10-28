@@ -861,6 +861,19 @@ body.theme-dark .reading-backdrop {
   pointer-events: none;
   transition: opacity var(--transition-slow);
   z-index: 40;
+  overflow: hidden;
+}
+
+.ads-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  backdrop-filter: blur(0px);
+  opacity: 0;
+  transition: opacity var(--transition-slow), backdrop-filter var(--transition-slow);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .ads-panel.is-open {
@@ -877,6 +890,9 @@ body.theme-dark .reading-backdrop {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+  z-index: 2;
+  transition: filter var(--transition-slow), opacity var(--transition-slow);
 }
 
 .ads-panel__header {
@@ -951,6 +967,18 @@ body.theme-dark .reading-backdrop {
   }
 }
 
+.ads-panel--blurred::after {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px);
+  opacity: 1;
+}
+
+.ads-panel--blurred .ads-panel__dialog {
+  filter: blur(8px);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .ads-card {
   position: relative;
   display: flex;
@@ -964,12 +992,37 @@ body.theme-dark .reading-backdrop {
   cursor: pointer;
   width: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 .ads-card:hover,
 .ads-card.is-active {
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
   transform: translateY(-2px);
+}
+
+.ads-card__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.05) 0%, rgba(15, 23, 42, 0.85) 100%);
+  color: #f8fafc;
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform var(--transition-slow), opacity var(--transition-slow);
+}
+
+.ads-card:hover .ads-card__overlay,
+.ads-card.is-active .ads-card__overlay,
+.ads-card:focus-within .ads-card__overlay {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .ads-card:focus-visible {
@@ -1283,16 +1336,40 @@ body.theme-dark .reading-backdrop {
 
 .ads-card .ad-actions {
   --ad-action-offset: 0.75rem;
-  flex-direction: row;
 }
 
-.ads-card.is-active .ad-actions,
-.ads-card:hover .ad-actions,
-.ads-card:focus-within .ad-actions {
+.ads-card__overlay .ad-actions {
+  position: static;
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
   pointer-events: auto;
-  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-start;
+}
+
+.ads-card__overlay .ad-details {
+  margin: 0;
+  gap: 0.4rem;
+}
+
+.ads-card__overlay .ad-details__address {
+  color: inherit;
+}
+
+.ads-card__overlay .ad-details__links {
+  gap: 0.4rem;
+}
+
+.ads-card__overlay .ad-details__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.ads-card__overlay .ad-details__link:hover,
+.ads-card__overlay .ad-details__link:focus-visible {
+  text-decoration: underline;
 }
 
 body.ads-open {

@@ -3433,6 +3433,10 @@ function destroyTurnBook() {
   if (book) {
     book.classList.remove('turn-enabled');
   }
+  const wrapper = state.dom?.turnWrapper;
+  if (wrapper) {
+    wrapper.classList.remove('turn-enabled');
+  }
 }
 
 function initializeTurnBook(initialIndex) {
@@ -3474,6 +3478,7 @@ function initializeTurnBook(initialIndex) {
   state.turn.instance = $turnBook;
   state.turn.pending = null;
   turnBook.classList.add('turn-enabled');
+  state.dom?.turnWrapper?.classList.add('turn-enabled');
   updateTurnBookSize();
 
   const initialPage = safeIndex + 1;

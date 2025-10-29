@@ -126,6 +126,11 @@ const readingSwipeState = {
 const UI_IDLE_DELAY = 4000;
 const UI_ACTIVITY_THROTTLE = 120;
 
+const CLOSE_ICON_DEFINITION = {
+  viewBox: '0 0 640 640',
+  path: 'M135.5 169C126.1 159.6 126.1 144.4 135.5 135.1C144.9 125.8 160.1 125.7 169.4 135.1L320.4 286.1L471.4 135.1C480.8 125.7 496 125.7 505.3 135.1C514.6 144.5 514.7 159.7 505.3 169L354.3 320L505.3 471C514.7 480.4 514.7 495.6 505.3 504.9C495.9 514.2 480.7 514.3 471.4 504.9L320.4 353.9L169.4 504.9C160 514.3 144.8 514.3 135.5 504.9C126.2 495.5 126.1 480.3 135.5 471L286.5 320L135.5 169z'
+};
+
 function setUiControlsHidden(hidden) {
   if (state.ui.isHidden === hidden) {
     return;
@@ -307,6 +312,15 @@ function createIconElement(definition) {
   path.setAttribute('d', definition.path);
   svg.appendChild(path);
   return svg;
+}
+
+function createCloseIconElement() {
+  const icon = createIconElement(CLOSE_ICON_DEFINITION);
+  if (!icon) {
+    return null;
+  }
+  icon.classList.add('icon--close');
+  return icon;
 }
 
 function getAdWindowTitle() {
@@ -702,7 +716,12 @@ function buildLayout() {
   const mobileMenuClose = document.createElement('button');
   mobileMenuClose.type = 'button';
   mobileMenuClose.className = 'mobile-menu-close';
-  mobileMenuClose.textContent = '×';
+  const mobileMenuCloseIcon = createCloseIconElement();
+  if (mobileMenuCloseIcon) {
+    mobileMenuClose.appendChild(mobileMenuCloseIcon);
+  } else {
+    mobileMenuClose.textContent = '×';
+  }
   menuBar.appendChild(mobileMenuClose);
 
   const stage = document.createElement('main');
@@ -800,7 +819,12 @@ function buildLayout() {
   const allPagesClose = document.createElement('button');
   allPagesClose.type = 'button';
   allPagesClose.className = 'all-pages__close';
-  allPagesClose.textContent = '×';
+  const allPagesCloseIcon = createCloseIconElement();
+  if (allPagesCloseIcon) {
+    allPagesClose.appendChild(allPagesCloseIcon);
+  } else {
+    allPagesClose.textContent = '×';
+  }
   allPagesHeader.appendChild(allPagesClose);
   const allPagesGrid = document.createElement('div');
   allPagesGrid.className = 'all-pages__grid';
@@ -827,7 +851,12 @@ function buildLayout() {
   const printClose = document.createElement('button');
   printClose.type = 'button';
   printClose.className = 'print-panel__close';
-  printClose.textContent = '×';
+  const printCloseIcon = createCloseIconElement();
+  if (printCloseIcon) {
+    printClose.appendChild(printCloseIcon);
+  } else {
+    printClose.textContent = '×';
+  }
   printHeader.appendChild(printHeadingGroup);
   printHeader.appendChild(printClose);
   const printGrid = document.createElement('div');
@@ -862,7 +891,12 @@ function buildLayout() {
   const archiveClose = document.createElement('button');
   archiveClose.type = 'button';
   archiveClose.className = 'archive-panel__close';
-  archiveClose.textContent = '×';
+  const archiveCloseIcon = createCloseIconElement();
+  if (archiveCloseIcon) {
+    archiveClose.appendChild(archiveCloseIcon);
+  } else {
+    archiveClose.textContent = '×';
+  }
   archiveHeader.appendChild(archiveTitle);
   archiveHeader.appendChild(archiveClose);
   const archiveList = document.createElement('ul');
@@ -925,7 +959,12 @@ function buildLayout() {
   const readingClose = document.createElement('button');
   readingClose.type = 'button';
   readingClose.className = 'close-article';
-  readingClose.textContent = '×';
+  const readingCloseIcon = createCloseIconElement();
+  if (readingCloseIcon) {
+    readingClose.appendChild(readingCloseIcon);
+  } else {
+    readingClose.textContent = '×';
+  }
   readingControls.appendChild(readingClose);
 
   readingToolbar.appendChild(readingControls);
@@ -967,7 +1006,12 @@ function buildLayout() {
   const adsClose = document.createElement('button');
   adsClose.type = 'button';
   adsClose.className = 'ads-panel__close';
-  adsClose.textContent = '×';
+  const adsCloseIcon = createCloseIconElement();
+  if (adsCloseIcon) {
+    adsClose.appendChild(adsCloseIcon);
+  } else {
+    adsClose.textContent = '×';
+  }
   adsHeader.appendChild(adsClose);
   const adsContent = document.createElement('div');
   adsContent.className = 'ads-panel__content';
@@ -1001,7 +1045,12 @@ function buildLayout() {
   const settingsClose = document.createElement('button');
   settingsClose.type = 'button';
   settingsClose.className = 'settings-panel__close';
-  settingsClose.textContent = '×';
+  const settingsCloseIcon = createCloseIconElement();
+  if (settingsCloseIcon) {
+    settingsClose.appendChild(settingsCloseIcon);
+  } else {
+    settingsClose.textContent = '×';
+  }
   settingsHeader.appendChild(settingsTitle);
   settingsHeader.appendChild(settingsClose);
   const settingsBody = document.createElement('div');
@@ -1064,7 +1113,12 @@ function buildLayout() {
   const audioClose = document.createElement('button');
   audioClose.type = 'button';
   audioClose.className = 'audio-player__close';
-  audioClose.textContent = '×';
+  const audioCloseIcon = createCloseIconElement();
+  if (audioCloseIcon) {
+    audioClose.appendChild(audioCloseIcon);
+  } else {
+    audioClose.textContent = '×';
+  }
 
   audioHeader.appendChild(audioInfo);
   audioHeader.appendChild(audioClose);

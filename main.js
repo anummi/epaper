@@ -4555,14 +4555,24 @@ function startPan(event) {
 }
 
 function handleStagePointerDown(event) {
-  if (state.zoom.scale !== 1) {
-    return;
-  }
   const target = event.target;
   if (!(target instanceof Element)) {
     return;
   }
   if (target.closest('.ad-actions, .nav-button, .zoom-menu')) {
+    return;
+  }
+
+  const isTouch = event.pointerType === 'touch';
+  if (isTouch) {
+    updatePointerTracker(event);
+    if (pointerTracker.size >= 2) {
+      beginPinch(getActiveSurface());
+      return;
+    }
+  }
+
+  if (state.zoom.scale !== 1) {
     return;
   }
   beginSwipeTracking(event, { mode: 'free' });

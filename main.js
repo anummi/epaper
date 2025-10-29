@@ -25,6 +25,7 @@ const AD_ACTION_FALLBACKS = {
 const state = {
   config: null,
   imagePaths: [],
+  previewImagePaths: [],
   pageMaps: [],
   pageArticles: [],
   pageAds: [],
@@ -804,7 +805,8 @@ function buildLayout() {
   mobileMenuIcon.setAttribute('aria-hidden', 'true');
   mobileMenuIcon.textContent = '☰';
   const mobileMenuLabel = document.createElement('span');
-  mobileMenuLabel.className = 'mobile-menu-button__label';
+  mobileMenuLabel.className = 'mobile-menu-button__label visually-hidden';
+  mobileMenuLabel.setAttribute('aria-hidden', 'true');
   mobileMenuButton.appendChild(mobileMenuIcon);
   mobileMenuButton.appendChild(mobileMenuLabel);
   shell.appendChild(mobileMenuButton);
@@ -1543,6 +1545,7 @@ function applyIssue(issue, options = {}) {
   }
 
   state.imagePaths = Array.isArray(issue.imagePaths) ? issue.imagePaths : [];
+  state.previewImagePaths = Array.isArray(issue.previewImagePaths) ? issue.previewImagePaths : [];
   state.pageMaps = Array.isArray(issue.pageMaps) ? issue.pageMaps : [];
   state.pageArticles = Array.isArray(issue.pageArticles) ? issue.pageArticles : [];
   state.pageAds = Array.isArray(issue.pageAds) ? issue.pageAds : [];
@@ -1693,7 +1696,9 @@ function bindNavigationHandlers() {
     button.addEventListener('click', () => {
       const action = button.dataset.action;
       closeMobileMenu();
-      collapseDesktopMenu();
+      if (action !== 'toggle-menu') {
+        collapseDesktopMenu();
+      }
       registerUserActivity();
       handleNavigationAction(action);
     });
@@ -3244,7 +3249,9 @@ function prepareAudioForIssue() {
 }
 
 async function loadIssueData(config, issuePath) {
-  const rootPath = `static/${config.id}`;
+  const basePath = `static/${config.id}`;
+  const paperSlug = String(config.paper || '').trim();
+  const issueRootPath = paperSlug ? `${basePath}/${paperSlug}` : basePath;
   let archiveData = Array.isArray(state.archiveItems) && state.archiveItems.length
     ? state.archiveItems
     : null;
@@ -3255,7 +3262,7 @@ async function loadIssueData(config, issuePath) {
   const sanitizedTargetParam = sanitizeIssueParam(rawIssueParam);
 
   if (!archiveData) {
-    const archiveUrl = `${rootPath}/${config.paper}_arch.htm`;
+    const archiveUrl = `${basePath}/${config.paper}_arch.htm`;
     const archiveResponse = await fetch(archiveUrl);
     if (!archiveResponse.ok) {
       throw new Error(`Arkistotiedoston lataus epäonnistui: ${archiveResponse.status}`);
@@ -3288,7 +3295,7 @@ async function loadIssueData(config, issuePath) {
     throw new Error('Lehden polkua ei löytynyt arkistosta.');
   }
 
-  const issueUrl = `${rootPath}/${selectedEntry.p}${config.paper}_cont.htm`;
+  const issueUrl = `${issueRootPath}/${selectedEntry.p}${config.paper}_cont.htm`;
   const issueResponse = await fetch(issueUrl);
   if (!issueResponse.ok) {
     throw new Error(`Lehden datan lataus epäonnistui: ${issueResponse.status}`);
@@ -3300,11 +3307,16 @@ async function loadIssueData(config, issuePath) {
 
   const imagePaths = Array.from(
     { length: issueData.pages },
-    (_, index) => `${rootPath}/${selectedEntry.p}p${index + 1}.webp`
+    (_, index) => `${issueRootPath}/${selectedEntry.p}p${index + 1}.webp`
+  );
+  const previewImagePaths = Array.from(
+    { length: issueData.pages },
+    (_, index) => `${issueRootPath}/${selectedEntry.p}hp${index + 1}.webp`
   );
 
   return {
     imagePaths,
+    previewImagePaths,
     pageMaps: issueData.pageMaps || [],
     pageArticles: issueData.pageArticles || [],
     pageAds: issueData.pageAds || [],
@@ -4420,7 +4432,8 @@ function buildPrintGrid() {
     const preview = document.createElement('div');
     preview.className = 'print-page__preview';
     const img = document.createElement('img');
-    img.src = src;
+    const previewSrc = state.previewImagePaths?.[index] || src;
+    img.src = previewSrc;
     img.alt = `${altPrefix} ${index + 1}`;
     preview.appendChild(img);
 
@@ -4680,7 +4693,8 @@ function buildAllPagesGrid() {
     preview.style.setProperty('--page-ratio', String(safeRatio));
     pages.forEach(pageIndex => {
       const img = document.createElement('img');
-      img.src = state.imagePaths[pageIndex];
+      const previewSrc = state.previewImagePaths?.[pageIndex] || state.imagePaths[pageIndex];
+      img.src = previewSrc;
       const altBase = state.settings.language === 'en' ? 'Page' : 'Sivu';
       img.alt = `${altBase} ${pageIndex + 1}`;
       preview.appendChild(img);
@@ -4800,7 +4814,9 @@ function getArchiveCoverSrc(path) {
   if (!normalized) {
     return '';
   }
-  return `static/${state.config.id}/${normalized}p1.webp`;
+  const paperSlug = String(state.config.paper || '').trim();
+  const prefix = paperSlug ? `${paperSlug}/` : '';
+  return `static/${state.config.id}/${prefix}${normalized}hp1.webp`;
 }
 
 function handleArchiveSelection(path) {

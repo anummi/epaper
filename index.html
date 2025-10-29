@@ -12,17 +12,80 @@
   </head>
   <body>
     <div id="app-root"></div>
-    <script
-      src="https://code.jquery.com/jquery-3.7.1.min.js"
-      integrity="sha256-3fp9awj4qvQ+YdN0wEfr2E1VlzDq+W8sELpAo7P5p30="
-      crossorigin="anonymous"
-    ></script>
-    <script
-      src="https://cdnjs.cloudflare.com/ajax/libs/turn.js/4.1.0/turn.min.js"
-      integrity="sha512-0Ffm+MIw+QxZ9G8fxIUKFvdcGaOeL50DJBSSTXobHxPPH/FkOFjvFsRQAt2bQVWwtIg9Y9ycYzaPt+F6DRCc9w=="
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer"
-    ></script>
+    <script>
+      (function () {
+        const groups = [
+          {
+            name: 'jQuery',
+            global: ['jQuery'],
+            urls: [
+              'https://code.jquery.com/jquery-3.7.1.min.js',
+              'https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js'
+            ]
+          },
+          {
+            name: 'turn.js',
+            global: ['jQuery', 'fn', 'turn'],
+            urls: [
+              'https://cdnjs.cloudflare.com/ajax/libs/turn.js/4.1.0/turn.min.js',
+              'https://cdn.jsdelivr.net/npm/turn.js@4.1.0/turn.min.js',
+              'https://cdn.jsdelivr.net/npm/turn.js@3/turn.min.js'
+            ]
+          }
+        ];
+
+        function resolveGlobalPath(parts) {
+          let current = window;
+          for (const part of parts) {
+            if (current == null || !(part in current)) {
+              return undefined;
+            }
+            current = current[part];
+          }
+          return current;
+        }
+
+        function loadScript(url) {
+          return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = url;
+            script.async = false;
+            script.onload = () => resolve();
+            script.onerror = () => {
+              script.remove();
+              reject(new Error(`Failed to load ${url}`));
+            };
+            document.head.appendChild(script);
+          });
+        }
+
+        async function loadGroup(group) {
+          for (const url of group.urls) {
+            try {
+              await loadScript(url);
+              if (resolveGlobalPath(group.global)) {
+                return;
+              }
+            } catch (error) {
+              console.warn('[ExternalLibLoader]', error.message);
+            }
+          }
+          throw new Error(`Unable to load ${group.name}`);
+        }
+
+        const readyPromise = (async () => {
+          for (const group of groups) {
+            await loadGroup(group);
+          }
+        })();
+
+        readyPromise.catch((error) => {
+          console.error('[ExternalLibLoader] Libraries failed to load.', error);
+        });
+
+        window.__externalLibsReady = readyPromise;
+      })();
+    </script>
     <script src="config.js"></script>
     <script src="main.js" type="module"></script>
   </body>

@@ -1,5 +1,13 @@
 'use strict';
 
+if (typeof window !== 'undefined' && window.__externalLibsReady) {
+  try {
+    await window.__externalLibsReady;
+  } catch (error) {
+    console.warn('[TurnDebug] Ulkoisten kirjastojen lataaminen epäonnistui.', error);
+  }
+}
+
 const maxScale = 4;
 const minScale = 1;
 const scaleStep = 0.5;

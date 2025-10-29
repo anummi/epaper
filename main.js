@@ -1,13 +1,5 @@
 'use strict';
 
-if (typeof window !== 'undefined' && window.__externalLibsReady) {
-  try {
-    await window.__externalLibsReady;
-  } catch (error) {
-    console.warn('[TurnDebug] Ulkoisten kirjastojen lataaminen epäonnistui.', error);
-  }
-}
-
 const maxScale = 4;
 const minScale = 1;
 const scaleStep = 0.5;
@@ -49,10 +41,6 @@ const state = {
   slides: [],
   currentSlide: 0,
   activePageIndex: 0,
-  turn: {
-    instance: null,
-    pending: null
-  },
   articleOrder: [],
   currentArticleId: null,
   currentAdId: null,
@@ -124,7 +112,10 @@ const swipeState = {
   startY: 0,
   startTime: 0,
   isTracking: false,
-  isSwipe: false
+  isSwipe: false,
+  active: false,
+  mode: 'free',
+  progress: 0
 };
 
 const readingSwipeState = {
@@ -2518,7 +2509,7 @@ function handleResize() {
       state.zoom.translateX = constrained.x;
       state.zoom.translateY = constrained.y;
       applyZoom(surface);
-      updateTurnBookSize();
+      updateSlideLayout();
     }
     updateAllPagesSizing();
     refreshAdsPanelLayout();
@@ -3375,24 +3366,22 @@ function renderSlides() {
     return;
   }
 
-  destroyTurnBook();
   pageTrack.innerHTML = '';
-
-  const turnWrapper = document.createElement('div');
-  turnWrapper.className = 'turn-wrapper';
-  const turnBook = document.createElement('div');
-  turnBook.className = 'turn-book';
-  turnWrapper.appendChild(turnBook);
-  pageTrack.appendChild(turnWrapper);
 
   if (!state.dom) {
     state.dom = {};
   }
-  state.dom.turnWrapper = turnWrapper;
-  state.dom.turnBook = turnBook;
+
+  state.dom.pageTrack = pageTrack;
+  pageTrack.classList.remove('is-dragging');
+
+  const slider = document.createElement('div');
+  slider.className = 'page-slider';
+  pageTrack.appendChild(slider);
+  state.dom.pageSlider = slider;
 
   const slides = definitions.map(pages => createSlide(pages));
-  slides.forEach(slide => turnBook.appendChild(slide.element));
+  slides.forEach(slide => slider.appendChild(slide.element));
   state.slides = slides;
 
   let targetIndex = definitions.findIndex(def => def.includes(state.activePageIndex));
@@ -3401,193 +3390,102 @@ function renderSlides() {
   }
 
   requestAnimationFrame(() => {
-    console.log('[TurnDebug] Kaappaus aloitetaan, dioja:', slides.length, 'kohdeindeksi:', targetIndex);
     slides.forEach(slide => captureBaseSize(slide.surface));
-    const initialized = initializeTurnBook(targetIndex);
-    console.log('[TurnDebug] Turn-initialisointi valmis, onnistuiko:', initialized);
-    if (!initialized) {
-      applySlideChange(targetIndex, { preserveZoom: false });
-    }
+    applySlideChange(targetIndex, { preserveZoom: false, immediate: true });
   });
 }
 
-function isTurnAvailable() {
-  const { jQuery } = window;
-  return Boolean(jQuery && jQuery.fn && typeof jQuery.fn.turn === 'function');
+function getStageWidth() {
+  const track = state.dom?.pageTrack;
+  if (track) {
+    return track.clientWidth;
+  }
+  const stage = document.querySelector('.page-stage');
+  return stage ? stage.clientWidth : 0;
 }
 
-function getTurnInstance() {
-  if (!state.turn || !state.turn.instance) {
-    return null;
-  }
-  const instance = state.turn.instance;
-  return typeof instance.turn === 'function' ? instance : null;
-}
-
-function destroyTurnBook() {
-  const instance = getTurnInstance();
-  if (instance) {
-    try {
-      instance.turn('destroy');
-    } catch (error) {
-      console.warn('Turn.js-instanssin tuhoaminen epäonnistui:', error);
-    }
-  }
-  if (!state.turn) {
-    state.turn = { instance: null, pending: null };
-  } else {
-    state.turn.instance = null;
-    state.turn.pending = null;
-  }
-  const book = state.dom?.turnBook;
-  if (book) {
-    book.classList.remove('turn-enabled');
-  }
-  const wrapper = state.dom?.turnWrapper;
-  if (wrapper) {
-    wrapper.classList.remove('turn-enabled');
-  }
-}
-
-function initializeTurnBook(initialIndex) {
-  const turnBook = state.dom?.turnBook;
-  if (!turnBook) {
-    console.log('[TurnDebug] TurnBook puuttuu alustuksessa.');
-    return false;
-  }
-  if (!isTurnAvailable()) {
-    console.log('[TurnDebug] jQuery.fn.turn ei ole saatavilla.');
-    destroyTurnBook();
-    return false;
-  }
-  const jQuery = window.jQuery;
-  const $turnBook = jQuery(turnBook);
-  const safeIndex = Number.isInteger(initialIndex) ? initialIndex : 0;
-  const size = measureTurnSize(safeIndex);
-  const options = {
-    autoCenter: true,
-    // Turn.js saa aina vain yhden "sivun" kerrallaan, koska käytämme
-    // omia aukeamaelementtejä joissa voi olla kaksi sivukuvaa vierekkäin.
-    // Jos näyttäisimme Turn.js:lle "double"-tilan, se yrittäisi asettaa
-    // kaksi aukeamaa rinnakkain, jolloin näkymä kutistuisi liikaa.
-    display: 'single',
-    gradients: true,
-    elevation: 80,
-    duration: 800,
-    when: {
-      turning: (event, page) => handleTurnTurning(event, page),
-      turned: (event, page) => handleTurnTurned(event, page)
-    }
-  };
-  console.log('[TurnDebug] Turn-vaihtoehdot', { safeIndex, size, options });
-  if (size) {
-    options.width = size.width;
-    options.height = size.height;
-  }
-  try {
-    $turnBook.turn(options);
-    console.log('[TurnDebug] turn.js alustettu onnistuneesti.');
-  } catch (error) {
-    console.warn('Turn.js:n alustaminen epäonnistui:', error);
-    destroyTurnBook();
-    return false;
-  }
-
-  state.turn.instance = $turnBook;
-  state.turn.pending = null;
-  turnBook.classList.add('turn-enabled');
-  state.dom?.turnWrapper?.classList.add('turn-enabled');
-  updateTurnBookSize();
-
-  const initialPage = safeIndex + 1;
-  const currentPage = Number($turnBook.turn('page')) || 0;
-  if (currentPage !== initialPage) {
-    state.turn.pending = { index: safeIndex, options: { preserveZoom: false } };
-    try {
-      $turnBook.turn('page', initialPage);
-      console.log('[TurnDebug] Turn siirtyi aloitussivulle', initialPage);
-    } catch (error) {
-      console.warn('Turn.js ei pystynyt siirtymään aloitussivulle:', error);
-      state.turn.pending = null;
-      applySlideChange(safeIndex, { preserveZoom: false });
-    }
-  } else {
-    console.log('[TurnDebug] Turn oli jo oikealla sivulla', currentPage);
-    applySlideChange(safeIndex, { preserveZoom: false });
-  }
-
-  return true;
-}
-
-function measureTurnSize(targetIndex = null) {
+function positionSlides(activeIndex, { immediate = false } = {}) {
   const slides = state.slides || [];
-  if (!slides.length) {
-    return null;
+  const track = state.dom?.pageTrack;
+  const dragging = Boolean(track && track.classList.contains('is-dragging'));
+
+  slides.forEach((slide, slideIndex) => {
+    if (!slide?.element) {
+      return;
+    }
+    if (immediate) {
+      slide.element.style.transition = 'none';
+    } else if (!dragging) {
+      slide.element.style.transition = '';
+    }
+    const offset = slideIndex - activeIndex;
+    slide.element.style.transform = `translateX(${offset * 100}%)`;
+    slide.element.classList.toggle('is-active', slideIndex === activeIndex);
+    slide.element.classList.toggle('is-before', slideIndex < activeIndex);
+    slide.element.classList.toggle('is-after', slideIndex > activeIndex);
+    if (!dragging) {
+      slide.element.classList.remove('is-peek');
+    }
+  });
+
+  swipeState.progress = 0;
+
+  if (immediate) {
+    requestAnimationFrame(() => {
+      slides.forEach(slide => {
+        if (slide?.element) {
+          slide.element.style.transition = '';
+        }
+      });
+    });
   }
-  let target = null;
-  if (Number.isInteger(targetIndex) && targetIndex >= 0 && targetIndex < slides.length) {
-    target = slides[targetIndex];
-  }
-  if (!target) {
-    const current = state.currentSlide != null && state.currentSlide >= 0 && state.currentSlide < slides.length
-      ? slides[state.currentSlide]
-      : null;
-    target = current || slides[0];
-  }
-  const surface = target?.surface;
-  if (!surface) {
-    return null;
-  }
-  const baseWidth = Number.parseFloat(surface.dataset.baseWidth || '');
-  const baseHeight = Number.parseFloat(surface.dataset.baseHeight || '');
-  const rect = surface.getBoundingClientRect();
-  const width = Number.isFinite(baseWidth) ? baseWidth : rect.width;
-  const height = Number.isFinite(baseHeight) ? baseHeight : rect.height;
-  if (!width || !height) {
-    return null;
-  }
-  return { width, height };
 }
 
-function updateTurnBookSize() {
-  const instance = getTurnInstance();
-  if (!instance) {
+function setSlidesInteractive(enabled) {
+  const slides = state.slides || [];
+  slides.forEach(slide => {
+    if (!slide?.element) {
+      return;
+    }
+    slide.element.style.transition = enabled ? 'none' : '';
+    if (!enabled) {
+      slide.element.classList.remove('is-peek');
+    }
+  });
+
+  const track = state.dom?.pageTrack;
+  if (track) {
+    track.classList.toggle('is-dragging', enabled);
+  }
+}
+
+function updateSlideProgress(progress) {
+  const slides = state.slides || [];
+  const normalized = Number.isFinite(progress) ? progress : 0;
+  const clamped = clamp(normalized, -1, 1);
+  swipeState.progress = clamped;
+
+  slides.forEach((slide, slideIndex) => {
+    if (!slide?.element) {
+      return;
+    }
+    const offset = slideIndex - state.currentSlide - clamped;
+    slide.element.style.transform = `translateX(${offset * 100}%)`;
+    const isPeek = (clamped > 0 && slideIndex === state.currentSlide + 1)
+      || (clamped < 0 && slideIndex === state.currentSlide - 1);
+    slide.element.classList.toggle('is-peek', isPeek);
+  });
+}
+
+function resetSlideProgress() {
+  if (swipeState.progress === 0) {
     return;
   }
-  const size = measureTurnSize(state.currentSlide);
-  if (!size) {
-    return;
-  }
-  try {
-    instance.turn('size', size.width, size.height);
-  } catch (error) {
-    console.warn('Turn.js:n koon päivittäminen epäonnistui:', error);
-  }
+  updateSlideProgress(0);
 }
 
-function handleTurnTurning(event, page) {
-  const index = Math.max(0, (Number(page) || 1) - 1);
-  console.log('[TurnDebug] turning-event', { page, index });
-  if (!state.turn) {
-    state.turn = { instance: null, pending: null };
-  }
-  if (!state.turn.pending || state.turn.pending.index !== index) {
-    state.turn.pending = {
-      index,
-      options: { preserveZoom: false }
-    };
-  }
-}
-
-function handleTurnTurned(event, page) {
-  const index = Math.max(0, (Number(page) || 1) - 1);
-  console.log('[TurnDebug] turned-event', { page, index });
-  const pending = state.turn?.pending;
-  const options = pending && pending.index === index ? pending.options || {} : {};
-  if (state.turn) {
-    state.turn.pending = null;
-  }
-  applySlideChange(index, options);
+function updateSlideLayout() {
+  positionSlides(state.currentSlide, { immediate: true });
 }
 
 function buildSlideDefinitions({ orientation, isCompact }) {
@@ -3992,39 +3890,17 @@ function handleRectClick(event) {
   }
 }
 
-function gotoSlide(index) {
+function gotoSlide(index, options = {}) {
   if (index < 0 || index >= state.slides.length) {
     return;
   }
-  updateActiveSlide(index);
+  updateActiveSlide(index, options);
 }
 
 function updateActiveSlide(index, options = {}) {
   if (index < 0 || index >= state.slides.length) {
     return;
   }
-  const instance = getTurnInstance();
-  if (instance) {
-    const targetPage = index + 1;
-    const currentPage = Number(instance.turn('page')) || 0;
-    state.turn.pending = { index, options };
-    console.log('[TurnDebug] Pyydetty sivu', targetPage, 'nykyinen sivu', currentPage);
-    if (currentPage === targetPage) {
-      console.log('[TurnDebug] Turn on jo oikeassa sivussa, käsitellään turned');
-      handleTurnTurned(null, targetPage);
-    } else {
-      try {
-        instance.turn('page', targetPage);
-        console.log('[TurnDebug] Turn-komento annettu sivulle', targetPage);
-      } catch (error) {
-        console.warn('Sivun vaihtaminen turn.js:llä epäonnistui:', error);
-        state.turn.pending = null;
-        applySlideChange(index, options);
-      }
-    }
-    return;
-  }
-  console.log('[TurnDebug] Turn-instanssia ei ole, käytetään fallbackia.');
   applySlideChange(index, options);
 }
 
@@ -4032,25 +3908,15 @@ function applySlideChange(index, options = {}) {
   const {
     preserveZoom = false,
     keepReadingOpen = false,
-    activePageIndex = null
+    activePageIndex = null,
+    immediate = false
   } = options;
 
   const slides = state.slides || [];
   if (!slides.length || !slides[index]) {
     return;
   }
-
-  slides.forEach((slide, slideIndex) => {
-    if (!slide?.element) {
-      return;
-    }
-    if (slideIndex === index) {
-      slide.element.classList.add('is-active');
-    } else {
-      slide.element.classList.remove('is-active');
-    }
-  });
-
+  positionSlides(index, { immediate });
   state.currentSlide = index;
   const current = slides[index];
   deactivateAllAdHotspots();
@@ -4070,7 +3936,6 @@ function applySlideChange(index, options = {}) {
     applyZoom(current.surface);
   }
 
-  updateTurnBookSize();
   highlightAllPages();
   updatePageIndicator();
   updateNavButtons();
@@ -4320,13 +4185,38 @@ function handleDoubleClick(event) {
   }
 }
 
-function beginSwipeTracking(event) {
+function beginSwipeTracking(event, options = {}) {
+  const { mode = 'free', initialProgress = 0 } = options;
   swipeState.pointerId = event.pointerId;
   swipeState.startX = event.clientX;
   swipeState.startY = event.clientY;
   swipeState.startTime = event.timeStamp || performance.now();
   swipeState.isTracking = true;
   swipeState.isSwipe = false;
+  swipeState.mode = mode;
+  swipeState.active = mode === 'zoom-overflow' && getStageWidth() > 0;
+  swipeState.progress = clamp(initialProgress, -1, 1);
+  if (swipeState.active) {
+    setSlidesInteractive(true);
+    updateSlideProgress(swipeState.progress);
+  } else {
+    swipeState.progress = 0;
+  }
+}
+
+function resetSwipeTracking(options = {}) {
+  const { preserveSwipe = false } = options;
+  swipeState.pointerId = null;
+  swipeState.startX = 0;
+  swipeState.startY = 0;
+  swipeState.startTime = 0;
+  swipeState.isTracking = false;
+  swipeState.active = false;
+  swipeState.mode = 'free';
+  swipeState.progress = 0;
+  if (!preserveSwipe) {
+    swipeState.isSwipe = false;
+  }
 }
 
 function updatePointerTracker(event) {
@@ -4426,23 +4316,34 @@ function startPan(event) {
   updatePointerTracker(event);
   const isTouch = event.pointerType === 'touch';
 
+  if (surface.setPointerCapture) {
+    try {
+      surface.setPointerCapture(event.pointerId);
+    } catch (error) {
+      // Pointer capture may fail if the element is gone; ignore silently.
+    }
+  }
+
   if (isTouch && pointerTracker.size >= 2) {
-    surface.setPointerCapture(event.pointerId);
     beginPinch(surface);
     return;
   }
   if (pinchState.active) {
-    surface.setPointerCapture(event.pointerId);
     return;
   }
   if (state.zoom.scale === 1) {
-    beginSwipeTracking(event);
+    beginSwipeTracking(event, { mode: 'free' });
+    panState.active = false;
+    panState.pointerId = null;
+    panState.surface = surface;
     return;
   }
-  surface.setPointerCapture(event.pointerId);
   swipeState.isTracking = false;
   swipeState.pointerId = null;
   swipeState.isSwipe = false;
+  swipeState.mode = 'free';
+  swipeState.active = false;
+  swipeState.progress = 0;
   event.preventDefault();
   panState.active = true;
   panState.pointerId = event.pointerId;
@@ -4464,7 +4365,7 @@ function handleStagePointerDown(event) {
   if (target.closest('.ad-actions, .nav-button, .zoom-menu')) {
     return;
   }
-  beginSwipeTracking(event);
+  beginSwipeTracking(event, { mode: 'free' });
 }
 
 function movePan(event) {
@@ -4479,28 +4380,83 @@ function movePan(event) {
     }
     endPinchGesture();
   }
-  if (swipeState.isTracking && event.pointerId === swipeState.pointerId) {
+
+  const isSwipePointer = swipeState.isTracking && event.pointerId === swipeState.pointerId;
+  const stageWidth = getStageWidth();
+  const surface = panState.surface instanceof Element
+    ? panState.surface
+    : (event.currentTarget instanceof Element ? event.currentTarget : null);
+
+  if (isSwipePointer && swipeState.mode === 'free') {
     const dx = event.clientX - swipeState.startX;
     const dy = event.clientY - swipeState.startY;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+    if (!swipeState.active) {
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10 && stageWidth > 0) {
+        swipeState.active = true;
+        setSlidesInteractive(true);
+        updateSlideProgress(-dx / stageWidth);
+        event.preventDefault();
+      } else if (Math.abs(dy) > 10) {
+        resetSwipeTracking();
+      }
+    } else if (stageWidth > 0) {
+      event.preventDefault();
+      updateSlideProgress(-dx / stageWidth);
+    }
+    if (!swipeState.active && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
       event.preventDefault();
     }
     return;
   }
-  if (!panState.active || event.pointerId !== panState.pointerId) {
+
+  const isPanPointer = panState.active && event.pointerId === panState.pointerId && surface instanceof Element;
+
+  if (!isPanPointer) {
+    if (isSwipePointer && swipeState.mode === 'zoom-overflow' && surface instanceof Element && stageWidth > 0) {
+      const dx = event.clientX - panState.startX;
+      const dy = event.clientY - panState.startY;
+      const desiredX = panState.baseX + dx;
+      const desiredY = panState.baseY + dy;
+      const constrained = constrainTranslation(surface, desiredX, desiredY, state.zoom.scale);
+      const overflowX = desiredX - constrained.x;
+      updateSlideProgress(-overflowX / stageWidth);
+      event.preventDefault();
+    }
     return;
   }
+
   event.preventDefault();
-  const surface = panState.surface || event.currentTarget;
-  if (!(surface instanceof Element)) {
-    return;
-  }
   const dx = event.clientX - panState.startX;
   const dy = event.clientY - panState.startY;
-  const constrained = constrainTranslation(surface, panState.baseX + dx, panState.baseY + dy, state.zoom.scale);
+  const desiredX = panState.baseX + dx;
+  const desiredY = panState.baseY + dy;
+  const constrained = constrainTranslation(surface, desiredX, desiredY, state.zoom.scale);
   state.zoom.translateX = constrained.x;
   state.zoom.translateY = constrained.y;
   applyZoom(surface);
+
+  if (state.zoom.scale <= 1 || !(stageWidth > 0)) {
+    return;
+  }
+
+  const overflowX = desiredX - constrained.x;
+  const canGoNext = state.currentSlide < state.slides.length - 1;
+  const canGoPrev = state.currentSlide > 0;
+  const progress = -overflowX / stageWidth;
+
+  if (swipeState.mode === 'zoom-overflow' && isSwipePointer) {
+    updateSlideProgress(progress);
+    return;
+  }
+
+  if (Math.abs(overflowX) > 12 && ((overflowX < 0 && canGoNext) || (overflowX > 0 && canGoPrev))) {
+    beginSwipeTracking(event, { mode: 'zoom-overflow', initialProgress: progress });
+    swipeState.active = true;
+    setSlidesInteractive(true);
+    updateSlideProgress(progress);
+  } else if (swipeState.mode === 'zoom-overflow') {
+    updateSlideProgress(progress);
+  }
 }
 
 function endPan(event) {
@@ -4510,33 +4466,96 @@ function endPan(event) {
   if (pinchState.active && pointerTracker.size < 2) {
     endPinchGesture();
   }
-  if (swipeState.isTracking && event.pointerId === swipeState.pointerId) {
+
+  const surface = panState.surface instanceof Element ? panState.surface : null;
+  const isSwipePointer = swipeState.isTracking && event.pointerId === swipeState.pointerId;
+
+  if (isSwipePointer) {
     const isCancel = event.type === 'pointercancel';
-    if (!isCancel) {
-      const dx = event.clientX - swipeState.startX;
-      const dy = event.clientY - swipeState.startY;
+    let slideChanged = false;
+
+    if (swipeState.active && !isCancel) {
       const elapsed = (event.timeStamp || performance.now()) - swipeState.startTime;
-      const horizontalDominant = Math.abs(dx) > Math.abs(dy);
-      if (horizontalDominant && Math.abs(dx) > 60 && elapsed < 600) {
-        const direction = dx < 0 ? 1 : -1;
-        gotoSlide(state.currentSlide + direction);
-        swipeState.isSwipe = true;
-      } else {
-        swipeState.isSwipe = false;
+      let progress = swipeState.progress;
+
+      if (swipeState.mode === 'free') {
+        const dx = event.clientX - swipeState.startX;
+        const dy = event.clientY - swipeState.startY;
+        const stageWidth = getStageWidth();
+        const horizontalDominant = Math.abs(dx) > Math.abs(dy);
+        if (stageWidth > 0 && horizontalDominant) {
+          progress = -dx / stageWidth;
+          swipeState.progress = progress;
+        } else if (!horizontalDominant) {
+          progress = 0;
+        }
+        const fastSwipe = Math.abs(dx) > 25 && elapsed < 200;
+        if ((Math.abs(progress) >= 0.3 || fastSwipe) && horizontalDominant) {
+          const direction = progress > 0 ? 1 : -1;
+          const targetIndex = state.currentSlide + direction;
+          if (targetIndex >= 0 && targetIndex < state.slides.length) {
+            setSlidesInteractive(false);
+            gotoSlide(targetIndex);
+            swipeState.isSwipe = true;
+            slideChanged = true;
+          }
+        }
+      } else if (swipeState.mode === 'zoom-overflow') {
+        const stageWidth = getStageWidth();
+        if (surface && stageWidth > 0) {
+          const dx = event.clientX - panState.startX;
+          const dy = event.clientY - panState.startY;
+          const desiredX = panState.baseX + dx;
+          const desiredY = panState.baseY + dy;
+          const constrained = constrainTranslation(surface, desiredX, desiredY, state.zoom.scale);
+          const overflowX = desiredX - constrained.x;
+          progress = -overflowX / stageWidth;
+          swipeState.progress = progress;
+        }
+        if (Math.abs(progress) >= 0.3) {
+          const direction = progress > 0 ? 1 : -1;
+          const targetIndex = state.currentSlide + direction;
+          if (targetIndex >= 0 && targetIndex < state.slides.length) {
+            setSlidesInteractive(false);
+            gotoSlide(targetIndex);
+            swipeState.isSwipe = true;
+            slideChanged = true;
+          }
+        }
       }
-    } else {
-      swipeState.isSwipe = false;
     }
-    swipeState.isTracking = false;
-    swipeState.pointerId = null;
+
+    if (!slideChanged) {
+      swipeState.isSwipe = false;
+      setSlidesInteractive(false);
+      positionSlides(state.currentSlide);
+    }
+
+    if (surface && surface.hasPointerCapture?.(event.pointerId)) {
+      try {
+        surface.releasePointerCapture(event.pointerId);
+      } catch (error) {
+        // Ignore release errors
+      }
+    }
+
+    resetSwipeTracking({ preserveSwipe: slideChanged });
+    panState.active = false;
+    panState.pointerId = null;
+    panState.surface = null;
     return;
   }
+
   if (!panState.active || event.pointerId !== panState.pointerId) {
     return;
   }
-  const surface = panState.surface || event.currentTarget;
-  if (surface instanceof Element && surface.hasPointerCapture?.(event.pointerId)) {
-    surface.releasePointerCapture(event.pointerId);
+
+  if (surface && surface.hasPointerCapture?.(event.pointerId)) {
+    try {
+      surface.releasePointerCapture(event.pointerId);
+    } catch (error) {
+      // ignore
+    }
   }
   panState.active = false;
   panState.pointerId = null;

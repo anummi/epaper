@@ -1394,10 +1394,6 @@ function refreshLocalizedTexts(options = {}) {
     dom.zoomReset.textContent = resetLabel;
     dom.zoomReset.setAttribute('aria-label', resetLabel);
   }
-  if (dom.zoomPageLabel) {
-    dom.zoomPageLabel.textContent = resolveLabel('zoomPanelPageLabel', 'Sivut');
-  }
-
   if (dom.mobileMenuButton) {
     const openLabel = resolveLabel('openMenu', 'Avaa valikko');
     dom.mobileMenuButton.setAttribute('aria-label', openLabel);
@@ -1878,6 +1874,7 @@ function attachGlobalListeners() {
     settingsClose,
     languageSelect,
     darkModeToggle,
+    zoomControlsToggle,
     audioBackdrop,
     audioClose,
     audioPrev,
@@ -4075,7 +4072,8 @@ function updateNavButtons() {
 function updatePageIndicator() {
   const indicator = state.dom?.pageIndicator;
   const zoomIndicator = state.dom?.zoomPageIndicator;
-  if (!indicator && !zoomIndicator) {
+  const zoomLabel = state.dom?.zoomPageLabel;
+  if (!indicator && !zoomIndicator && !zoomLabel) {
     return;
   }
 
@@ -4089,6 +4087,11 @@ function updatePageIndicator() {
       zoomIndicator.textContent = '';
       zoomIndicator.hidden = true;
       zoomIndicator.setAttribute('aria-hidden', 'true');
+    }
+    if (zoomLabel) {
+      zoomLabel.textContent = '';
+      zoomLabel.hidden = true;
+      zoomLabel.setAttribute('aria-hidden', 'true');
     }
   };
 
@@ -4127,6 +4130,10 @@ function updatePageIndicator() {
     indicator.textContent = text;
     indicator.hidden = isZoomed;
     indicator.setAttribute('aria-hidden', isZoomed ? 'true' : 'false');
+  }
+
+  if (zoomLabel) {
+    zoomLabel.textContent = text;
   }
 
   if (zoomIndicator) {

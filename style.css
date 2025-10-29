@@ -622,6 +622,7 @@ body.is-zoomed .maprect {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-align: center;
   pointer-events: none;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
   backdrop-filter: blur(8px);
@@ -692,6 +693,7 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
   transform: translate(-50%, 0);
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   padding: 0.5rem;
   border-radius: 999px;
@@ -717,6 +719,21 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
   text-transform: uppercase;
   color: var(--text);
   white-space: nowrap;
+  text-align: center;
+}
+
+.zoom-menu__page-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-text, var(--text));
+  white-space: nowrap;
+}
+
+.zoom-menu.is-persistent .zoom-menu__page-label {
+  display: inline-flex;
+  align-items: center;
 }
 
 body.ui-controls-hidden .zoom-menu.is-visible {

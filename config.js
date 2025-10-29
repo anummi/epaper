@@ -13,6 +13,7 @@ window.epaperConfig = {
     settingsClose: { fi: 'Sulje asetukset', en: 'Close settings' },
     settingsLanguage: { fi: 'Kieli', en: 'Language' },
     settingsDarkMode: { fi: 'Tumma tila', en: 'Dark mode' },
+    settingsZoomPanel: { fi: 'Pidä zoom napit aktiivisena', en: 'Keep zoom controls visible' },
     printTitle: { fi: 'Tulosta sivut', en: 'Print pages' },
     printSelectAll: { fi: 'Valitse kaikki sivut', en: 'Select all pages' },
     printClearSelection: { fi: 'Poista valinnat', en: 'Clear selection' },
@@ -33,6 +34,7 @@ window.epaperConfig = {
     pageIndicatorRange: { fi: 'Sivut {from}–{to} / {total}', en: 'Pages {from}–{to} / {total}' },
     zoomIn: { fi: 'Zoomaa sisään', en: 'Zoom in' },
     zoomOut: { fi: 'Zoomaa ulos', en: 'Zoom out' },
+    zoomPanelPageLabel: { fi: 'Sivut', en: 'Pages' },
     closeAllPages: { fi: 'Sulje kaikki sivut', en: 'Close overview' },
     closeArchive: { fi: 'Sulje arkisto', en: 'Close archive' },
     closeArticle: { fi: 'Sulje artikkeli', en: 'Close article' },
@@ -68,6 +70,10 @@ window.epaperConfig = {
     }
   },
   articleClicksEnabled: true,
+  zoomPanel: {
+    persistent: true,
+    showSetting: true
+  },
   navigation: [
     {
       action: 'toggle-menu',

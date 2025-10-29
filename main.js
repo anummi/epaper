@@ -4496,9 +4496,21 @@ function endPinchGesture() {
   panState.surface = surface || null;
 }
 
+function isInteractiveSurfaceTarget(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  return Boolean(target.closest('.maprect, .ad-hotspot, .ad-action, .ad-details__link'));
+}
+
 function startPan(event) {
   const surface = event.currentTarget;
   if (!(surface instanceof Element)) {
+    return;
+  }
+
+  if (isInteractiveSurfaceTarget(event)) {
     return;
   }
   updatePointerTracker(event);

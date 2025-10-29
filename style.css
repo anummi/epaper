@@ -413,7 +413,6 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   touch-action: manipulation;
   outline: none;
   --ad-action-offset: 0.4rem;
-  overflow: hidden;
 }
 
 .ad-hotspot::after {
@@ -458,26 +457,26 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   z-index: 5;
 }
 
-body.is-zoomed .ad-hotspot,
-body.is-zoomed .ad-hotspot .ad-actions,
-body.is-zoomed .ad-action {
+body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot,
+body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot .ad-actions,
+body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-action {
   pointer-events: none !important;
 }
 
-body.is-zoomed .ad-hotspot {
+body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot {
   cursor: default;
 }
 
-body.is-zoomed .ad-hotspot::after,
-body.is-zoomed .ad-hotspot.is-active::after,
-body.is-zoomed .ad-hotspot:focus-visible::after,
-body.is-zoomed .ad-hotspot:hover::after,
-body.is-zoomed .ad-hotspot:focus-within::after {
+body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot::after,
+body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot.is-active::after,
+body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot:focus-visible::after,
+body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot:hover::after,
+body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot:focus-within::after {
   opacity: 0;
   border-color: transparent;
 }
 
-body.is-zoomed .ad-hotspot .ad-actions {
+body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot .ad-actions {
   opacity: 0;
   transform: translateY(-0.5rem);
 }
@@ -543,6 +542,31 @@ body.is-zoomed .maprect {
   display: grid;
   place-items: center;
   z-index: 45;
+}
+
+.page-indicator {
+  position: absolute;
+  bottom: clamp(1rem, 4vh, 2.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.85);
+  color: #fff;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.25);
+  transition: opacity var(--transition), transform var(--transition);
+  z-index: 46;
+}
+
+body.theme-dark .page-indicator {
+  background: rgba(241, 245, 249, 0.92);
+  color: var(--text);
+  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.35);
 }
 
 .nav-prev {
@@ -813,6 +837,7 @@ body.theme-dark .reading-backdrop {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  touch-action: pan-y;
 }
 
 .reading-window.is-open {
@@ -825,6 +850,13 @@ body.theme-dark .reading-backdrop {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.reading-window__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
 }
 
 .reading-window__toolbar {
@@ -902,6 +934,12 @@ body.theme-dark .reading-backdrop {
   margin: 0;
   font-size: 1.2rem;
   font-weight: 600;
+}
+
+.reading-window__position {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 .reading-window__content {

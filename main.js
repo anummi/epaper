@@ -103,6 +103,15 @@ const swipeState = {
   isSwipe: false
 };
 
+const readingSwipeState = {
+  pointerId: null,
+  startX: 0,
+  startY: 0,
+  startTime: 0,
+  active: false,
+  swiped: false
+};
+
 function normalizeLanguage(value) {
   if (!value) {
     return null;
@@ -153,6 +162,16 @@ function resolveLabel(key, fallback = '') {
   return getLocalizedValue(labels[key], fallback);
 }
 
+function formatLabel(template, replacements = {}) {
+  if (typeof template !== 'string' || !template) {
+    return '';
+  }
+  return Object.entries(replacements).reduce((result, [key, value]) => {
+    const pattern = new RegExp(`\\{${key}\\}`, 'g');
+    return result.replace(pattern, String(value));
+  }, template);
+}
+
 function getNavigationLabelByAction(action) {
   if (!action) {
     return '';
@@ -167,6 +186,30 @@ function getNavigationLabelByAction(action) {
 
 function getAdConfig() {
   return state.config?.ads || {};
+}
+
+function areAdHoverActionsEnabled() {
+  const value = getAdConfig().hoverActionsEnabled;
+  if (value == null) {
+    return true;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized !== 'false' && normalized !== '0' && normalized !== 'no';
+  }
+  return Boolean(value);
+}
+
+function shouldAllowAdClicksWhenZoomed() {
+  const value = getAdConfig().allowClicksWhenZoomed;
+  if (value == null) {
+    return false;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'yes';
+  }
+  return Boolean(value);
 }
 
 function getAdActionLabel(key, fallback = '') {
@@ -467,6 +510,9 @@ function createAdDetailsSection(ad) {
 }
 
 function buildAdActionDescriptors(adId, ad) {
+  if (!areAdHoverActionsEnabled()) {
+    return [];
+  }
   const descriptors = [];
   const details = getAdContactDetails(ad);
   if (details.website) {
@@ -506,6 +552,12 @@ function createAdActionsContainer(adId, ad) {
     actions.appendChild(button);
   });
   return actions;
+}
+
+function applyAdPreferences() {
+  const allowZoomClicks = shouldAllowAdClicksWhenZoomed();
+  document.body.classList.toggle('ads-clickable-when-zoomed', allowZoomClicks);
+  document.body.classList.toggle('ads-hover-disabled', !areAdHoverActionsEnabled());
 }
 
 function getAdImageSources(adId) {
@@ -637,6 +689,13 @@ function buildLayout() {
   } else {
     navNext.textContent = '›';
   }
+
+  const pageIndicator = document.createElement('div');
+  pageIndicator.className = 'page-indicator';
+  pageIndicator.setAttribute('aria-live', 'polite');
+  pageIndicator.hidden = true;
+  pageIndicator.setAttribute('aria-hidden', 'true');
+  stage.appendChild(pageIndicator);
 
   const zoomMenu = document.createElement('div');
   zoomMenu.className = 'zoom-menu';
@@ -779,9 +838,19 @@ function buildLayout() {
   readingToolbar.appendChild(readingControls);
   readingHeader.appendChild(readingToolbar);
 
+  const readingTitleRow = document.createElement('div');
+  readingTitleRow.className = 'reading-window__title-row';
   const readingTitle = document.createElement('h2');
   readingTitle.className = 'reading-window__title';
-  readingHeader.appendChild(readingTitle);
+  readingTitle.hidden = true;
+  readingTitle.setAttribute('aria-hidden', 'true');
+  readingTitleRow.appendChild(readingTitle);
+  const readingPosition = document.createElement('span');
+  readingPosition.className = 'reading-window__position';
+  readingPosition.hidden = true;
+  readingPosition.setAttribute('aria-hidden', 'true');
+  readingTitleRow.appendChild(readingPosition);
+  readingHeader.appendChild(readingTitleRow);
   const readingContent = document.createElement('div');
   readingContent.id = 'article-content';
   readingContent.className = 'reading-window__content';
@@ -1000,6 +1069,7 @@ function buildLayout() {
     navPrev,
     navNext,
     pageTrack,
+    pageIndicator,
     zoomMenu,
     zoomOut,
     zoomIn,
@@ -1019,6 +1089,7 @@ function buildLayout() {
     readingPrev,
     readingNext,
     readingTitle,
+    readingPosition,
     readingClose,
     readingContent,
     adsPanel,
@@ -1078,6 +1149,8 @@ function refreshLocalizedTexts(options = {}) {
     buildNavigation();
     bindNavigationHandlers();
   }
+
+  applyAdPreferences();
 
   dom.navPrev?.setAttribute('aria-label', resolveLabel('prevPage', 'Edellinen sivu'));
   dom.navNext?.setAttribute('aria-label', resolveLabel('nextPage', 'Seuraava sivu'));
@@ -1173,6 +1246,7 @@ function refreshLocalizedTexts(options = {}) {
   }
   updateAllPagesSizing();
   buildAdsPanelContent();
+  updatePageIndicator();
   if (state.currentAdId) {
     openAdById(state.currentAdId);
   }
@@ -1268,6 +1342,7 @@ async function init() {
   }
 
   buildLayout();
+  applyAdPreferences();
   document.body.classList.add('menu-collapsed');
 
   const storedSettings = loadStoredSettings();
@@ -1393,6 +1468,9 @@ function buildNavigation() {
     if (!item) {
       return;
     }
+    if (item.visible === false) {
+      return;
+    }
     const button = document.createElement('button');
     button.type = 'button';
     button.classList.add('menu-item');
@@ -1515,6 +1593,7 @@ function attachGlobalListeners() {
     readingNext,
     readingClose,
     readingBackdrop,
+    readingWindow,
     adsPanel,
     adsClose,
     settingsPanel,
@@ -1566,10 +1645,19 @@ function attachGlobalListeners() {
   readingNext?.addEventListener('click', () => gotoAdjacentArticle(1));
   readingClose?.addEventListener('click', closeReadingWindow);
   readingBackdrop?.addEventListener('click', closeReadingWindow);
+  readingWindow?.addEventListener('pointerdown', handleReadingPointerDown);
+  readingWindow?.addEventListener('pointermove', handleReadingPointerMove);
+  readingWindow?.addEventListener('pointerup', handleReadingPointerUp);
+  readingWindow?.addEventListener('pointercancel', handleReadingPointerCancel);
+  readingWindow?.addEventListener('click', suppressReadingSwipeClick, true);
 
   adsClose?.addEventListener('click', closeAdsPanel);
   adsPanel?.addEventListener('click', event => {
     if (event.target === adsPanel) {
+      if (state.currentAdId) {
+        closeReadingWindow();
+        return;
+      }
       closeAdsPanel();
     }
   });
@@ -1602,6 +1690,7 @@ function attachGlobalListeners() {
   stage?.addEventListener('pointermove', movePan);
   stage?.addEventListener('pointerup', endPan);
   stage?.addEventListener('pointercancel', endPan);
+  stage?.addEventListener('wheel', handleStageWheel, { passive: false });
 
   document.addEventListener('fullscreenchange', updateFullscreenUI);
   document.addEventListener('keydown', handleKeydown);
@@ -1872,9 +1961,50 @@ function setArticleNavButton(button, targetId, label) {
   }
 }
 
+function updateReadingPositionIndicator() {
+  const positionElement = state.dom?.readingPosition;
+  if (!positionElement) {
+    return;
+  }
+  const hide = () => {
+    positionElement.textContent = '';
+    positionElement.hidden = true;
+    positionElement.setAttribute('aria-hidden', 'true');
+  };
+
+  if (state.currentAdId) {
+    hide();
+    return;
+  }
+
+  const order = Array.isArray(state.articleOrder) ? state.articleOrder : [];
+  const currentId = state.currentArticleId ? String(state.currentArticleId) : null;
+  if (!currentId || !order.length) {
+    hide();
+    return;
+  }
+
+  const currentIndex = order.indexOf(currentId);
+  if (currentIndex === -1) {
+    hide();
+    return;
+  }
+
+  const template = resolveLabel('readingPosition', 'Juttu {current} / {total}');
+  const text = formatLabel(template, {
+    current: currentIndex + 1,
+    total: order.length
+  });
+  positionElement.textContent = text;
+  positionElement.hidden = false;
+  positionElement.setAttribute('aria-hidden', 'false');
+}
+
 function updateReadingNavigation() {
   const { readingLabel, readingPrev, readingNext } = state.dom || {};
   const isAd = Boolean(state.currentAdId);
+
+  updateReadingPositionIndicator();
 
   if (readingLabel) {
     readingLabel.textContent = isAd
@@ -2971,6 +3101,7 @@ async function loadIssueData(config, issuePath) {
 function renderSlides() {
   if (!Array.isArray(state.imagePaths) || state.imagePaths.length === 0) {
     console.warn('Ei sivuja näytettäväksi.');
+    updatePageIndicator();
     return;
   }
 
@@ -3186,6 +3317,14 @@ function attachAdHotspots(container, pageIndex) {
   container.appendChild(overlay);
 }
 
+function shouldShowAdHoverForPointer(event) {
+  if (!event || typeof event.pointerType !== 'string') {
+    return true;
+  }
+  const type = event.pointerType.toLowerCase();
+  return type !== 'touch' && type !== 'pen';
+}
+
 function createAdHotspot(pageIndex, mapItem, ad) {
   if (!mapItem || !ad) {
     return null;
@@ -3215,8 +3354,18 @@ function createAdHotspot(pageIndex, mapItem, ad) {
     hotspot.appendChild(actions);
   }
 
-  hotspot.addEventListener('pointerenter', () => hotspot.classList.add('is-active'));
+  const handlePointerEnter = event => {
+    if (shouldShowAdHoverForPointer(event)) {
+      hotspot.classList.add('is-active');
+    }
+  };
+  hotspot.addEventListener('pointerenter', handlePointerEnter);
   hotspot.addEventListener('pointerleave', () => hotspot.classList.remove('is-active'));
+  hotspot.addEventListener('pointerdown', event => {
+    if (!shouldShowAdHoverForPointer(event)) {
+      hotspot.classList.remove('is-active');
+    }
+  });
   hotspot.addEventListener('focusin', () => hotspot.classList.add('is-active'));
   hotspot.addEventListener('focusout', event => {
     if (!hotspot.contains(event.relatedTarget)) {
@@ -3422,6 +3571,7 @@ function updateActiveSlide(index, options = {}) {
   }
 
   highlightAllPages();
+  updatePageIndicator();
   updateNavButtons();
   updateLocation();
 }
@@ -3453,6 +3603,50 @@ function updateNavButtons() {
   if (nextButton) {
     nextButton.disabled = disableNav || state.currentSlide >= state.slides.length - 1;
   }
+}
+
+function updatePageIndicator() {
+  const indicator = state.dom?.pageIndicator;
+  if (!indicator) {
+    return;
+  }
+
+  const hide = () => {
+    indicator.textContent = '';
+    indicator.hidden = true;
+    indicator.setAttribute('aria-hidden', 'true');
+  };
+
+  const totalPages = Array.isArray(state.imagePaths) ? state.imagePaths.length : 0;
+  const current = state.slides?.[state.currentSlide];
+  if (!current || !Array.isArray(current.pages) || !current.pages.length || totalPages === 0) {
+    hide();
+    return;
+  }
+
+  const pages = [...current.pages].sort((a, b) => a - b);
+  const firstPage = pages[0] + 1;
+  const lastPage = pages[pages.length - 1] + 1;
+  let text = '';
+
+  if (pages.length > 1 && firstPage !== lastPage) {
+    const template = resolveLabel('pageIndicatorRange', 'Sivut {from}–{to} / {total}');
+    text = formatLabel(template, {
+      from: firstPage,
+      to: lastPage,
+      total: totalPages
+    });
+  } else {
+    const template = resolveLabel('pageIndicatorSingle', 'Sivu {page} / {total}');
+    text = formatLabel(template, {
+      page: firstPage,
+      total: totalPages
+    });
+  }
+
+  indicator.textContent = text;
+  indicator.hidden = false;
+  indicator.setAttribute('aria-hidden', 'false');
 }
 
 function getActiveSurface() {
@@ -3584,6 +3778,13 @@ function handleWheel(event) {
   const delta = event.deltaY > 0 ? -scaleStep : scaleStep;
   const newScale = state.zoom.scale + delta;
   setZoom(newScale, { x: event.clientX, y: event.clientY });
+}
+
+function handleStageWheel(event) {
+  if (event.defaultPrevented) {
+    return;
+  }
+  handleWheel(event);
 }
 
 function handleDoubleClick(event) {
@@ -3824,6 +4025,106 @@ function suppressSwipeClicks(event) {
   event.preventDefault();
   event.stopPropagation();
   swipeState.isSwipe = false;
+}
+
+function resetReadingSwipeTracking(options = {}) {
+  const { preserveSwipe = false } = options;
+  readingSwipeState.pointerId = null;
+  readingSwipeState.startX = 0;
+  readingSwipeState.startY = 0;
+  readingSwipeState.startTime = 0;
+  readingSwipeState.active = false;
+  if (!preserveSwipe) {
+    readingSwipeState.swiped = false;
+  }
+}
+
+function canStartReadingSwipe(event) {
+  if (state.currentAdId || !state.currentArticleId) {
+    return false;
+  }
+  const readingWindow = state.dom.readingWindow;
+  if (!readingWindow || !readingWindow.classList.contains('is-open')) {
+    return false;
+  }
+  if (event.pointerType && event.pointerType !== 'touch') {
+    return false;
+  }
+  const order = Array.isArray(state.articleOrder) ? state.articleOrder : [];
+  const currentId = String(state.currentArticleId || '');
+  const currentIndex = order.indexOf(currentId);
+  if (currentIndex === -1) {
+    return false;
+  }
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex < order.length - 1;
+  if (!hasPrev && !hasNext) {
+    return false;
+  }
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  if (target.closest('a, button, input, textarea, select, [contenteditable="true"], .ad-details__link')) {
+    return false;
+  }
+  return true;
+}
+
+function handleReadingPointerDown(event) {
+  if (!canStartReadingSwipe(event)) {
+    return;
+  }
+  readingSwipeState.pointerId = event.pointerId;
+  readingSwipeState.startX = event.clientX;
+  readingSwipeState.startY = event.clientY;
+  readingSwipeState.startTime = event.timeStamp || performance.now();
+  readingSwipeState.active = true;
+  readingSwipeState.swiped = false;
+}
+
+function handleReadingPointerMove(event) {
+  if (!readingSwipeState.active || event.pointerId !== readingSwipeState.pointerId) {
+    return;
+  }
+  const dx = event.clientX - readingSwipeState.startX;
+  const dy = event.clientY - readingSwipeState.startY;
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+    event.preventDefault();
+  }
+}
+
+function handleReadingPointerUp(event) {
+  if (!readingSwipeState.active || event.pointerId !== readingSwipeState.pointerId) {
+    return;
+  }
+  const dx = event.clientX - readingSwipeState.startX;
+  const dy = event.clientY - readingSwipeState.startY;
+  const elapsed = (event.timeStamp || performance.now()) - readingSwipeState.startTime;
+  const horizontalDominant = Math.abs(dx) > Math.abs(dy);
+  if (horizontalDominant && Math.abs(dx) > 60 && elapsed < 600) {
+    const direction = dx < 0 ? 1 : -1;
+    gotoAdjacentArticle(direction);
+    readingSwipeState.swiped = true;
+    resetReadingSwipeTracking({ preserveSwipe: true });
+    return;
+  }
+  resetReadingSwipeTracking();
+}
+
+function handleReadingPointerCancel(event) {
+  if (readingSwipeState.active && event.pointerId === readingSwipeState.pointerId) {
+    resetReadingSwipeTracking();
+  }
+}
+
+function suppressReadingSwipeClick(event) {
+  if (!readingSwipeState.swiped) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  readingSwipeState.swiped = false;
 }
 
 function toggleAllPages(forceOpen) {
@@ -4124,6 +4425,7 @@ function closeReadingWindow() {
   if (!readingWindow) {
     return;
   }
+  resetReadingSwipeTracking();
   readingWindow.classList.remove('is-open');
   readingWindow.setAttribute('aria-hidden', 'true');
   readingWindow.classList.remove('reading-window--ad');

@@ -41,6 +41,10 @@ const state = {
   slides: [],
   currentSlide: 0,
   activePageIndex: 0,
+  turn: {
+    instance: null,
+    pending: null
+  },
   articleOrder: [],
   currentArticleId: null,
   currentAdId: null,
@@ -2506,6 +2510,7 @@ function handleResize() {
       state.zoom.translateX = constrained.x;
       state.zoom.translateY = constrained.y;
       applyZoom(surface);
+      updateTurnBookSize();
     }
     updateAllPagesSizing();
     refreshAdsPanelLayout();
@@ -3358,22 +3363,204 @@ function renderSlides() {
   state.slideDefinitions = definitions;
 
   const pageTrack = document.querySelector('.page-track');
+  if (!pageTrack) {
+    return;
+  }
+
+  destroyTurnBook();
   pageTrack.innerHTML = '';
 
-  const slides = definitions.map(pages => createSlide(pages));
-  slides.forEach(slide => pageTrack.appendChild(slide.element));
-  state.slides = slides;
+  const turnWrapper = document.createElement('div');
+  turnWrapper.className = 'turn-wrapper';
+  const turnBook = document.createElement('div');
+  turnBook.className = 'turn-book';
+  turnWrapper.appendChild(turnBook);
+  pageTrack.appendChild(turnWrapper);
 
-  requestAnimationFrame(() => {
-    slides.forEach(slide => captureBaseSize(slide.surface));
-  });
+  if (!state.dom) {
+    state.dom = {};
+  }
+  state.dom.turnWrapper = turnWrapper;
+  state.dom.turnBook = turnBook;
+
+  const slides = definitions.map(pages => createSlide(pages));
+  slides.forEach(slide => turnBook.appendChild(slide.element));
+  state.slides = slides;
 
   let targetIndex = definitions.findIndex(def => def.includes(state.activePageIndex));
   if (targetIndex === -1) {
     targetIndex = 0;
   }
-  updateActiveSlide(targetIndex, { preserveZoom: false });
-  highlightAllPages();
+
+  requestAnimationFrame(() => {
+    slides.forEach(slide => captureBaseSize(slide.surface));
+    const initialized = initializeTurnBook(targetIndex);
+    if (!initialized) {
+      applySlideChange(targetIndex, { preserveZoom: false });
+    }
+  });
+}
+
+function isTurnAvailable() {
+  const { jQuery } = window;
+  return Boolean(jQuery && jQuery.fn && typeof jQuery.fn.turn === 'function');
+}
+
+function getTurnInstance() {
+  if (!state.turn || !state.turn.instance) {
+    return null;
+  }
+  const instance = state.turn.instance;
+  return typeof instance.turn === 'function' ? instance : null;
+}
+
+function destroyTurnBook() {
+  const instance = getTurnInstance();
+  if (instance) {
+    try {
+      instance.turn('destroy');
+    } catch (error) {
+      console.warn('Turn.js-instanssin tuhoaminen epäonnistui:', error);
+    }
+  }
+  if (!state.turn) {
+    state.turn = { instance: null, pending: null };
+  } else {
+    state.turn.instance = null;
+    state.turn.pending = null;
+  }
+  const book = state.dom?.turnBook;
+  if (book) {
+    book.classList.remove('turn-enabled');
+  }
+}
+
+function initializeTurnBook(initialIndex) {
+  const turnBook = state.dom?.turnBook;
+  if (!turnBook) {
+    return false;
+  }
+  if (!isTurnAvailable()) {
+    destroyTurnBook();
+    return false;
+  }
+  const jQuery = window.jQuery;
+  const $turnBook = jQuery(turnBook);
+  const safeIndex = Number.isInteger(initialIndex) ? initialIndex : 0;
+  const size = measureTurnSize(safeIndex);
+  const options = {
+    autoCenter: true,
+    display: state.isCompact ? 'single' : 'double',
+    gradients: true,
+    elevation: 80,
+    duration: 800,
+    when: {
+      turning: (event, page) => handleTurnTurning(event, page),
+      turned: (event, page) => handleTurnTurned(event, page)
+    }
+  };
+  if (size) {
+    options.width = size.width;
+    options.height = size.height;
+  }
+  try {
+    $turnBook.turn(options);
+  } catch (error) {
+    console.warn('Turn.js:n alustaminen epäonnistui:', error);
+    destroyTurnBook();
+    return false;
+  }
+
+  state.turn.instance = $turnBook;
+  state.turn.pending = null;
+  turnBook.classList.add('turn-enabled');
+  updateTurnBookSize();
+
+  const initialPage = safeIndex + 1;
+  const currentPage = Number($turnBook.turn('page')) || 0;
+  if (currentPage !== initialPage) {
+    state.turn.pending = { index: safeIndex, options: { preserveZoom: false } };
+    try {
+      $turnBook.turn('page', initialPage);
+    } catch (error) {
+      console.warn('Turn.js ei pystynyt siirtymään aloitussivulle:', error);
+      state.turn.pending = null;
+      applySlideChange(safeIndex, { preserveZoom: false });
+    }
+  } else {
+    applySlideChange(safeIndex, { preserveZoom: false });
+  }
+
+  return true;
+}
+
+function measureTurnSize(targetIndex = null) {
+  const slides = state.slides || [];
+  if (!slides.length) {
+    return null;
+  }
+  let target = null;
+  if (Number.isInteger(targetIndex) && targetIndex >= 0 && targetIndex < slides.length) {
+    target = slides[targetIndex];
+  }
+  if (!target) {
+    const current = state.currentSlide != null && state.currentSlide >= 0 && state.currentSlide < slides.length
+      ? slides[state.currentSlide]
+      : null;
+    target = current || slides[0];
+  }
+  const surface = target?.surface;
+  if (!surface) {
+    return null;
+  }
+  const baseWidth = Number.parseFloat(surface.dataset.baseWidth || '');
+  const baseHeight = Number.parseFloat(surface.dataset.baseHeight || '');
+  const rect = surface.getBoundingClientRect();
+  const width = Number.isFinite(baseWidth) ? baseWidth : rect.width;
+  const height = Number.isFinite(baseHeight) ? baseHeight : rect.height;
+  if (!width || !height) {
+    return null;
+  }
+  return { width, height };
+}
+
+function updateTurnBookSize() {
+  const instance = getTurnInstance();
+  if (!instance) {
+    return;
+  }
+  const size = measureTurnSize(state.currentSlide);
+  if (!size) {
+    return;
+  }
+  try {
+    instance.turn('size', size.width, size.height);
+  } catch (error) {
+    console.warn('Turn.js:n koon päivittäminen epäonnistui:', error);
+  }
+}
+
+function handleTurnTurning(event, page) {
+  const index = Math.max(0, (Number(page) || 1) - 1);
+  if (!state.turn) {
+    state.turn = { instance: null, pending: null };
+  }
+  if (!state.turn.pending || state.turn.pending.index !== index) {
+    state.turn.pending = {
+      index,
+      options: { preserveZoom: false }
+    };
+  }
+}
+
+function handleTurnTurned(event, page) {
+  const index = Math.max(0, (Number(page) || 1) - 1);
+  const pending = state.turn?.pending;
+  const options = pending && pending.index === index ? pending.options || {} : {};
+  if (state.turn) {
+    state.turn.pending = null;
+  }
+  applySlideChange(index, options);
 }
 
 function buildSlideDefinitions({ orientation, isCompact }) {
@@ -3786,34 +3973,73 @@ function gotoSlide(index) {
 }
 
 function updateActiveSlide(index, options = {}) {
+  if (index < 0 || index >= state.slides.length) {
+    return;
+  }
+  const instance = getTurnInstance();
+  if (instance) {
+    const targetPage = index + 1;
+    const currentPage = Number(instance.turn('page')) || 0;
+    state.turn.pending = { index, options };
+    if (currentPage === targetPage) {
+      handleTurnTurned(null, targetPage);
+    } else {
+      try {
+        instance.turn('page', targetPage);
+      } catch (error) {
+        console.warn('Sivun vaihtaminen turn.js:llä epäonnistui:', error);
+        state.turn.pending = null;
+        applySlideChange(index, options);
+      }
+    }
+    return;
+  }
+  applySlideChange(index, options);
+}
+
+function applySlideChange(index, options = {}) {
   const {
     preserveZoom = false,
     keepReadingOpen = false,
     activePageIndex = null
   } = options;
-  if (state.currentSlide != null && state.slides[state.currentSlide]) {
-    state.slides[state.currentSlide].element.classList.remove('is-active');
-  }
 
-  state.currentSlide = index;
-  const current = state.slides[index];
-  if (!current) {
+  const slides = state.slides || [];
+  if (!slides.length || !slides[index]) {
     return;
   }
-  current.element.classList.add('is-active');
+
+  slides.forEach((slide, slideIndex) => {
+    if (!slide?.element) {
+      return;
+    }
+    if (slideIndex === index) {
+      slide.element.classList.add('is-active');
+    } else {
+      slide.element.classList.remove('is-active');
+    }
+  });
+
+  state.currentSlide = index;
+  const current = slides[index];
   deactivateAllAdHotspots();
+
   const nextActivePageIndex = Number.isInteger(activePageIndex)
     ? activePageIndex
-    : current.pages[0];
+    : (Array.isArray(current.pages) && current.pages.length ? current.pages[0] : 0);
   state.activePageIndex = nextActivePageIndex;
+
   if (!keepReadingOpen) {
     closeReadingWindow();
   }
 
   if (!preserveZoom) {
     resetZoom();
+  } else if (current.surface) {
+    applyZoom(current.surface);
   }
 
+  updateTurnBookSize();
   highlightAllPages();
   updatePageIndicator();
   updateNavButtons();

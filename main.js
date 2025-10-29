@@ -5484,6 +5484,22 @@ function updateReadingHeading(text, visible = false) {
   heading.setAttribute('aria-hidden', show ? 'false' : 'true');
 }
 
+function ensureArticleHeading(article) {
+  const content = state.dom.readingContent || document.querySelector('#article-content');
+  if (!content) {
+    return;
+  }
+
+  const hasInlineHeading = content.querySelector('.reading-article__title, h1, h2, h3');
+  if (hasInlineHeading) {
+    updateReadingHeading('', false);
+    return;
+  }
+
+  const text = article && typeof article.hl === 'string' ? article.hl.trim() : '';
+  updateReadingHeading(text, text.length > 0);
+}
+
 async function ensureArticleContentLoaded() {
   if (state.articleContent instanceof Map && state.articleContent.size > 0) {
     return true;
@@ -5543,16 +5559,17 @@ async function loadArticleContent(articleOrUrl) {
   const articleId = article && article.id != null ? String(article.id) : null;
   openReadingWindow();
   readingWindow.scrollTop = 0;
-  const headingText = typeof article.hl === 'string' ? article.hl.trim() : '';
-  updateReadingHeading(headingText, headingText.length > 0);
+  updateReadingHeading('', false);
   content.innerHTML = `<p>${resolveLabel('articleLoading', 'Ladataan sisältöä…')}</p>`;
 
   if (articleId) {
     if (renderStoredArticleContent(articleId)) {
+      ensureArticleHeading(article);
       return;
     }
     const hasLoaded = await ensureArticleContentLoaded();
     if (hasLoaded && renderStoredArticleContent(articleId)) {
+      ensureArticleHeading(article);
       return;
     }
   }
@@ -5574,6 +5591,7 @@ async function loadArticleContent(articleOrUrl) {
     const selector = state.config.articleClass || '.zoomArticle';
     const articleNode = doc.querySelector(selector) || doc.body;
     content.innerHTML = articleNode.innerHTML;
+    ensureArticleHeading(article);
 
     const images = content.querySelectorAll('img');
     images.forEach(image => {
@@ -5597,10 +5615,12 @@ async function loadArticleContent(articleOrUrl) {
     if (articleId) {
       const hasLoaded = await ensureArticleContentLoaded();
       if (hasLoaded && renderStoredArticleContent(articleId)) {
+        ensureArticleHeading(article);
         return;
       }
     }
     content.innerHTML = `<p>${resolveLabel('articleError', 'Artikkelin lataaminen epäonnistui.')}</p>`;
+    ensureArticleHeading(article);
   }
 }
 

@@ -631,6 +631,7 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
   left: 50%;
   transform: translate(-50%, 0);
   display: flex;
+  align-items: center;
   gap: 0.5rem;
   padding: 0.5rem;
   border-radius: 999px;
@@ -645,6 +646,17 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
 .zoom-menu.is-visible {
   opacity: 1;
   pointer-events: auto;
+}
+
+.zoom-menu__page-indicator {
+  align-self: center;
+  padding: 0 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 body.ui-controls-hidden .zoom-menu.is-visible {

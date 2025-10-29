@@ -762,6 +762,12 @@ function buildLayout() {
   zoomReset.type = 'button';
   zoomReset.className = 'zoom-button zoom-reset';
   zoomMenu.appendChild(zoomReset);
+  const zoomPageIndicator = document.createElement('span');
+  zoomPageIndicator.className = 'zoom-menu__page-indicator';
+  zoomPageIndicator.hidden = true;
+  zoomPageIndicator.setAttribute('aria-live', 'polite');
+  zoomPageIndicator.setAttribute('aria-hidden', 'true');
+  zoomMenu.appendChild(zoomPageIndicator);
   shell.appendChild(zoomMenu);
 
   const mobileMenuBackdrop = document.createElement('div');
@@ -1161,6 +1167,7 @@ function buildLayout() {
     zoomOut,
     zoomIn,
     zoomReset,
+    zoomPageIndicator,
     allPages,
     allPagesTitle,
     allPagesClose,
@@ -3764,14 +3771,22 @@ function updateNavButtons() {
 
 function updatePageIndicator() {
   const indicator = state.dom?.pageIndicator;
-  if (!indicator) {
+  const zoomIndicator = state.dom?.zoomPageIndicator;
+  if (!indicator && !zoomIndicator) {
     return;
   }
 
   const hide = () => {
-    indicator.textContent = '';
-    indicator.hidden = true;
-    indicator.setAttribute('aria-hidden', 'true');
+    if (indicator) {
+      indicator.textContent = '';
+      indicator.hidden = true;
+      indicator.setAttribute('aria-hidden', 'true');
+    }
+    if (zoomIndicator) {
+      zoomIndicator.textContent = '';
+      zoomIndicator.hidden = true;
+      zoomIndicator.setAttribute('aria-hidden', 'true');
+    }
   };
 
   const totalPages = Array.isArray(state.imagePaths) ? state.imagePaths.length : 0;
@@ -3781,10 +3796,12 @@ function updatePageIndicator() {
     return;
   }
 
+  const isZoomed = state.zoom.scale > 1;
   const pages = [...current.pages].sort((a, b) => a - b);
   const firstPage = pages[0] + 1;
   const lastPage = pages[pages.length - 1] + 1;
   let text = '';
+  let shortText = '';
 
   if (pages.length > 1 && firstPage !== lastPage) {
     const template = resolveLabel('pageIndicatorRange', 'Sivut {from}–{to} / {total}');
@@ -3793,17 +3810,27 @@ function updatePageIndicator() {
       to: lastPage,
       total: totalPages
     });
+    shortText = `${firstPage}–${lastPage} / ${totalPages}`;
   } else {
     const template = resolveLabel('pageIndicatorSingle', 'Sivu {page} / {total}');
     text = formatLabel(template, {
       page: firstPage,
       total: totalPages
     });
+    shortText = `${firstPage} / ${totalPages}`;
   }
 
-  indicator.textContent = text;
-  indicator.hidden = false;
-  indicator.setAttribute('aria-hidden', 'false');
+  if (indicator) {
+    indicator.textContent = text;
+    indicator.hidden = isZoomed;
+    indicator.setAttribute('aria-hidden', isZoomed ? 'true' : 'false');
+  }
+
+  if (zoomIndicator) {
+    zoomIndicator.textContent = shortText;
+    zoomIndicator.hidden = !isZoomed;
+    zoomIndicator.setAttribute('aria-hidden', isZoomed ? 'false' : 'true');
+  }
 }
 
 function getActiveSurface() {
@@ -3884,6 +3911,7 @@ function applyZoom(surface) {
     updateMobileMenuButtonVisibility();
     updateZoomUI();
     updateNavButtons();
+    updatePageIndicator();
   });
 }
 

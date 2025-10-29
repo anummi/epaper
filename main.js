@@ -3466,7 +3466,11 @@ function initializeTurnBook(initialIndex) {
   const size = measureTurnSize(safeIndex);
   const options = {
     autoCenter: true,
-    display: state.isCompact ? 'single' : 'double',
+    // Turn.js saa aina vain yhden "sivun" kerrallaan, koska käytämme
+    // omia aukeamaelementtejä joissa voi olla kaksi sivukuvaa vierekkäin.
+    // Jos näyttäisimme Turn.js:lle "double"-tilan, se yrittäisi asettaa
+    // kaksi aukeamaa rinnakkain, jolloin näkymä kutistuisi liikaa.
+    display: 'single',
     gradients: true,
     elevation: 80,
     duration: 800,

@@ -32,6 +32,7 @@ const state = {
   pdfPaths: [],
   articleLookup: new Map(),
   articlePageLookup: new Map(),
+  articleContent: new Map(),
   adLookup: new Map(),
   adPageLookup: new Map(),
   archiveItems: [],
@@ -1362,6 +1363,7 @@ function buildLayout() {
 
   refreshMobileMenuAccessibility();
   updateAudioUI();
+  positionZoomMenu();
 }
 
 function applyTheme() {
@@ -1645,6 +1647,16 @@ function applyIssue(issue, options = {}) {
   state.articleOrder = state.pageArticles
     .map(article => String(article.id))
     .filter(id => Boolean(id));
+  state.articleContent = new Map();
+  if (Array.isArray(issue.articleContent)) {
+    issue.articleContent.forEach(entry => {
+      if (!entry || entry.id == null) {
+        return;
+      }
+      const key = String(entry.id);
+      state.articleContent.set(key, entry);
+    });
+  }
   prepareAudioForIssue();
   state.currentArticleId = null;
   state.currentAdId = null;
@@ -1997,10 +2009,12 @@ function attachGlobalListeners() {
 
 function toggleMenuCollapsed() {
   document.body.classList.toggle('menu-collapsed');
+  positionZoomMenu();
 }
 
 function collapseDesktopMenu() {
   document.body.classList.add('menu-collapsed');
+  positionZoomMenu();
 }
 
 function shouldHideMobileMenuButton() {
@@ -2072,6 +2086,7 @@ function openMobileMenu() {
   }
   document.body.classList.add('mobile-menu-open');
   refreshMobileMenuAccessibility();
+  positionZoomMenu();
   const firstItem = state.dom?.menuContent?.querySelector('.menu-item');
   if (firstItem instanceof HTMLElement) {
     firstItem.focus({ preventScroll: true });
@@ -2085,6 +2100,7 @@ function closeMobileMenu(options = {}) {
   }
   document.body.classList.remove('mobile-menu-open');
   refreshMobileMenuAccessibility();
+  positionZoomMenu();
   const focusTrigger = Boolean(options.focusTrigger);
   if (focusTrigger && state.dom?.mobileMenuButton instanceof HTMLElement) {
     state.dom.mobileMenuButton.focus({ preventScroll: true });
@@ -2435,9 +2451,7 @@ function openArticleById(articleId) {
   }
   state.currentArticleId = id;
   updateReadingNavigation();
-  if (article.url) {
-    loadArticleContent(article.url);
-  }
+  loadArticleContent(article);
 }
 
 function openArchivePanel() {
@@ -2593,6 +2607,7 @@ function handleResize() {
     updateAllPagesSizing();
     refreshAdsPanelLayout();
     refreshMobileMenuAccessibility();
+    positionZoomMenu();
   }, 180);
 }
 
@@ -3412,12 +3427,27 @@ async function loadIssueData(config, issuePath) {
     (_, index) => `${issueRootPath}/${selectedEntry.p}hp${index + 1}.webp`
   );
 
+  let articleContent = [];
+  const articlesUrl = `${issueRootPath}/${selectedEntry.p}articles.json`;
+  try {
+    const articlesResponse = await fetch(articlesUrl);
+    if (articlesResponse.ok) {
+      const parsedArticles = await articlesResponse.json();
+      if (Array.isArray(parsedArticles)) {
+        articleContent = parsedArticles;
+      }
+    }
+  } catch (error) {
+    console.warn('Artikkelien sisällön lataaminen epäonnistui, käytetään verkko-osoitetta.', error);
+  }
+
   return {
     imagePaths,
     previewImagePaths,
     pageMaps: issueData.pageMaps || [],
     pageArticles: issueData.pageArticles || [],
     pageAds: issueData.pageAds || [],
+    articleContent,
     res: issueData.res,
     archiveItems: archiveData,
     path: normalizeArchivePath(selectedEntry.p),
@@ -3975,7 +4005,7 @@ function handleRectClick(event) {
   if (url) {
     state.currentArticleId = null;
     updateReadingNavigation();
-    loadArticleContent(url);
+    loadArticleContent({ url });
   }
 }
 
@@ -4103,7 +4133,10 @@ function updatePageIndicator() {
   }
 
   const isZoomed = state.zoom.scale > 1;
-  const showZoomIndicator = isZoomed || shouldKeepZoomMenuVisible();
+  const persistentZoom = shouldKeepZoomMenuVisible();
+  const showZoomIndicator = isZoomed;
+  const showZoomLabel = persistentZoom && !isZoomed;
+  const hideMainIndicator = isZoomed || persistentZoom;
   const pages = [...current.pages].sort((a, b) => a - b);
   const firstPage = pages[0] + 1;
   const lastPage = pages[pages.length - 1] + 1;
@@ -4129,14 +4162,14 @@ function updatePageIndicator() {
 
   if (indicator) {
     indicator.textContent = text;
-    indicator.hidden = showZoomIndicator;
-    indicator.setAttribute('aria-hidden', showZoomIndicator ? 'true' : 'false');
+    indicator.hidden = hideMainIndicator;
+    indicator.setAttribute('aria-hidden', hideMainIndicator ? 'true' : 'false');
   }
 
   if (zoomLabel) {
     zoomLabel.textContent = text;
-    zoomLabel.hidden = !showZoomIndicator;
-    zoomLabel.setAttribute('aria-hidden', showZoomIndicator ? 'false' : 'true');
+    zoomLabel.hidden = !showZoomLabel;
+    zoomLabel.setAttribute('aria-hidden', showZoomLabel ? 'false' : 'true');
   }
 
   if (zoomIndicator) {
@@ -4233,6 +4266,7 @@ function applyZoom(surface) {
       zoomMenu.classList.toggle('is-persistent', persistent);
       zoomMenu.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
     }
+    positionZoomMenu();
     updateMobileMenuButtonVisibility();
     updateZoomUI();
     updateNavButtons();
@@ -4263,10 +4297,25 @@ function updateZoomUI() {
     zoomPageLabel.setAttribute('aria-hidden', showLabel ? 'false' : 'true');
   }
   if (zoomPageIndicator) {
-    const showIndicator = isZoomed || persistent;
+    const showIndicator = isZoomed;
     zoomPageIndicator.hidden = !showIndicator;
     zoomPageIndicator.setAttribute('aria-hidden', showIndicator ? 'false' : 'true');
   }
+}
+
+function positionZoomMenu() {
+  const zoomMenu = state.dom?.zoomMenu || document.querySelector('.zoom-menu');
+  const stage = state.dom?.stage || document.querySelector('.page-stage');
+  if (!(zoomMenu instanceof HTMLElement) || !(stage instanceof HTMLElement)) {
+    return;
+  }
+  const rect = stage.getBoundingClientRect();
+  if (!Number.isFinite(rect.width) || rect.width <= 0) {
+    zoomMenu.style.left = '';
+    return;
+  }
+  const center = rect.left + rect.width / 2;
+  zoomMenu.style.left = `${center}px`;
 }
 
 function constrainTranslation(surface, translateX, translateY, scale) {
@@ -5311,19 +5360,141 @@ function resolveArticleUrl(url) {
   }
 }
 
-async function loadArticleContent(url) {
+const ARTICLE_STYLE_MAP = {
+  Otsikko: { tag: 'h2', className: 'reading-article__title' },
+  Ingressi: { tag: 'p', className: 'reading-article__lead' },
+  Teksti: { tag: 'p', className: 'reading-article__paragraph' },
+  Valiotsikko: { tag: 'h3', className: 'reading-article__subtitle' },
+  Kirjoittaja: { tag: 'p', className: 'reading-article__byline' },
+  Fakta: { tag: 'aside', className: 'reading-article__fact' },
+  Nosto: { tag: 'aside', className: 'reading-article__pullquote' },
+  NostoOtsikko: { tag: 'h4', className: 'reading-article__highlight-title' },
+  Sitaatti: { tag: 'blockquote', className: 'reading-article__quote' },
+  default: { tag: 'p', className: 'reading-article__paragraph' }
+};
+
+function getStoredArticleEntry(articleId) {
+  if (!articleId) {
+    return null;
+  }
+  return state.articleContent?.get(String(articleId)) || null;
+}
+
+function createArticleNodeForStyle(style) {
+  const descriptor = ARTICLE_STYLE_MAP[style] || ARTICLE_STYLE_MAP.default;
+  const element = document.createElement(descriptor.tag);
+  if (descriptor.className) {
+    element.className = descriptor.className;
+  }
+  return element;
+}
+
+function createArticleSegmentNode(segment) {
+  if (!segment || typeof segment.i !== 'string') {
+    return null;
+  }
+  const text = segment.i.replace(/\u0000/g, '');
+  if (!text) {
+    return null;
+  }
+  const charStyle = segment.attributes?.agcharstyle;
+  if (charStyle === 'Lihavointi') {
+    const strong = document.createElement('strong');
+    strong.textContent = text;
+    return strong;
+  }
+  if (charStyle === 'Kursivointi') {
+    const emphasis = document.createElement('em');
+    emphasis.textContent = text;
+    return emphasis;
+  }
+  return document.createTextNode(text);
+}
+
+function createArticleContentElement(entry) {
+  if (!entry || !Array.isArray(entry.ops)) {
+    return null;
+  }
+  const container = document.createElement('article');
+  container.className = 'reading-article';
+
+  entry.ops.forEach(op => {
+    if (!op) {
+      return;
+    }
+    const element = createArticleNodeForStyle(op.agparstyle);
+    const segments = Array.isArray(op.t) ? op.t : [];
+    segments.forEach(segment => {
+      const node = createArticleSegmentNode(segment);
+      if (node) {
+        element.appendChild(node);
+      }
+    });
+    if (!element.textContent.trim()) {
+      return;
+    }
+    container.appendChild(element);
+  });
+
+  return container.childNodes.length ? container : null;
+}
+
+function renderStoredArticleContent(articleId) {
+  const entry = getStoredArticleEntry(articleId);
+  if (!entry) {
+    return false;
+  }
+  const contentElement = createArticleContentElement(entry);
+  if (!contentElement) {
+    return false;
+  }
+  const content = state.dom.readingContent || document.querySelector('#article-content');
+  if (!content) {
+    return false;
+  }
+  content.innerHTML = '';
+  content.appendChild(contentElement);
+  return true;
+}
+
+function updateReadingHeading(text, visible = false) {
+  const heading = state.dom.readingTitle;
+  if (!heading) {
+    return;
+  }
+  const show = visible && typeof text === 'string' && text.trim().length > 0;
+  heading.textContent = show ? text : '';
+  heading.hidden = !show;
+  heading.setAttribute('aria-hidden', show ? 'false' : 'true');
+}
+
+async function loadArticleContent(articleOrUrl) {
   const readingWindow = state.dom.readingWindow || document.querySelector('.reading-window');
   const content = state.dom.readingContent || document.querySelector('#article-content');
   if (!readingWindow || !content) {
     return;
   }
 
+  const article = typeof articleOrUrl === 'string'
+    ? { url: articleOrUrl }
+    : (articleOrUrl && typeof articleOrUrl === 'object' ? articleOrUrl : {});
+  const articleId = article && article.id != null ? String(article.id) : null;
   openReadingWindow();
   readingWindow.scrollTop = 0;
+  updateReadingHeading('', false);
   content.innerHTML = `<p>${resolveLabel('articleLoading', 'Ladataan sisältöä…')}</p>`;
 
+  if (renderStoredArticleContent(articleId)) {
+    return;
+  }
+
+  if (!article.url) {
+    content.innerHTML = `<p>${resolveLabel('articleError', 'Artikkelin lataaminen epäonnistui.')}</p>`;
+    return;
+  }
+
   try {
-    const articleUrl = resolveArticleUrl(url);
+    const articleUrl = resolveArticleUrl(article.url);
     const response = await fetch(articleUrl);
     if (!response.ok) {
       throw new Error(`Artikkelin lataus epäonnistui: ${response.status}`);
@@ -5354,6 +5525,9 @@ async function loadArticleContent(url) {
     });
   } catch (error) {
     console.error('Artikkelin lataaminen epäonnistui:', error);
+    if (renderStoredArticleContent(articleId)) {
+      return;
+    }
     content.innerHTML = `<p>${resolveLabel('articleError', 'Artikkelin lataaminen epäonnistui.')}</p>`;
   }
 }

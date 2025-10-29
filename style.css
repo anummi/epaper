@@ -1914,6 +1914,10 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
     display: inline-flex;
   }
 
+  .mobile-menu-button.mobile-menu-button--hidden {
+    display: none;
+  }
+
   body.mobile-menu-open .mobile-menu-button {
     opacity: 0;
     pointer-events: none;

@@ -184,6 +184,18 @@ function getAdIconDefinition(key) {
   return icon;
 }
 
+function areArticleClicksEnabled() {
+  const value = state.config?.articleClicksEnabled;
+  if (value == null) {
+    return true;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized !== 'false' && normalized !== '0' && normalized !== 'no';
+  }
+  return Boolean(value);
+}
+
 function createIconElement(definition) {
   if (!definition || !definition.path) {
     return null;
@@ -1562,6 +1574,46 @@ function toggleMenuCollapsed() {
   document.body.classList.toggle('menu-collapsed');
 }
 
+function shouldHideMobileMenuButton() {
+  if (window.innerWidth >= 900) {
+    return false;
+  }
+  if (document.body.classList.contains('mobile-menu-open')) {
+    return true;
+  }
+  if (
+    document.body.classList.contains('is-zoomed') ||
+    document.body.classList.contains('reading-open') ||
+    document.body.classList.contains('ads-open') ||
+    document.body.classList.contains('audio-player-open')
+  ) {
+    return true;
+  }
+  const dom = state.dom || {};
+  if (dom.allPages?.classList.contains('is-open')) {
+    return true;
+  }
+  if (dom.archivePanel?.classList.contains('is-open')) {
+    return true;
+  }
+  if (dom.settingsPanel?.classList.contains('is-open')) {
+    return true;
+  }
+  if (dom.readingWindow?.classList.contains('is-open')) {
+    return true;
+  }
+  return false;
+}
+
+function updateMobileMenuButtonVisibility() {
+  const button = state.dom?.mobileMenuButton;
+  if (!button) {
+    return;
+  }
+  const shouldHide = shouldHideMobileMenuButton();
+  button.classList.toggle('mobile-menu-button--hidden', shouldHide);
+}
+
 function refreshMobileMenuAccessibility() {
   const { menuBar, mobileMenuBackdrop, mobileMenuButton } = state.dom || {};
   const isSmallViewport = window.innerWidth < 900;
@@ -1575,6 +1627,7 @@ function refreshMobileMenuAccessibility() {
   if (mobileMenuButton) {
     mobileMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   }
+  updateMobileMenuButtonVisibility();
 }
 
 function openMobileMenu() {
@@ -1914,6 +1967,7 @@ function openArchivePanel() {
   buildArchiveList();
   panel.classList.add('is-open');
   panel.setAttribute('aria-hidden', 'false');
+  updateMobileMenuButtonVisibility();
 }
 
 function closeArchivePanel() {
@@ -1923,6 +1977,7 @@ function closeArchivePanel() {
   }
   panel.classList.remove('is-open');
   panel.setAttribute('aria-hidden', 'true');
+  updateMobileMenuButtonVisibility();
 }
 
 function getAdsPanelGrid() {
@@ -1977,6 +2032,7 @@ function openAdsPanel() {
   requestAnimationFrame(() => {
     adsClose?.focus({ preventScroll: true });
   });
+  updateMobileMenuButtonVisibility();
 }
 
 function closeAdsPanel() {
@@ -1989,6 +2045,7 @@ function closeAdsPanel() {
   document.body.classList.remove('ads-open');
   panel.classList.remove('ads-panel--blurred');
   destroyAdsPanelLayout();
+  updateMobileMenuButtonVisibility();
 }
 
 function isAdsPanelOpen() {
@@ -2009,6 +2066,7 @@ function openSettingsPanel() {
   panel.classList.add('is-open');
   panel.setAttribute('aria-hidden', 'false');
   state.dom.languageSelect?.focus({ preventScroll: true });
+  updateMobileMenuButtonVisibility();
 }
 
 function closeSettingsPanel() {
@@ -2018,6 +2076,7 @@ function closeSettingsPanel() {
   }
   panel.classList.remove('is-open');
   panel.setAttribute('aria-hidden', 'true');
+  updateMobileMenuButtonVisibility();
 }
 
 function handleResize() {
@@ -2643,6 +2702,8 @@ function updateAudioUI() {
       audioResumeMessage.textContent = template.replace('{title}', resumeTitle);
     }
   }
+
+  updateMobileMenuButtonVisibility();
 }
 
 function formatTime(seconds) {
@@ -2997,6 +3058,8 @@ function createSvgOverlay(pageIndex) {
   svg.setAttribute('viewBox', `0 0 ${viewBox.width} ${viewBox.height}`);
   svg.classList.add('pagerect');
 
+  const articleClicksEnabled = areArticleClicksEnabled();
+
   pageMap.forEach(item => {
     if (item.t !== 0 || !item.c) {
       return;
@@ -3017,8 +3080,14 @@ function createSvgOverlay(pageIndex) {
     rect.setAttribute('width', width);
     rect.setAttribute('height', height);
     rect.setAttribute('class', 'maprect');
-    rect.setAttribute('role', 'button');
-    rect.setAttribute('tabindex', '0');
+
+    if (articleClicksEnabled) {
+      rect.setAttribute('role', 'button');
+      rect.setAttribute('tabindex', '0');
+    } else {
+      rect.setAttribute('aria-hidden', 'true');
+      rect.style.pointerEvents = 'none';
+    }
 
     const article = state.articleLookup.get(String(item.id));
     if (article) {
@@ -3027,13 +3096,15 @@ function createSvgOverlay(pageIndex) {
       rect.setAttribute('aria-label', article.hl || 'Artikkeli');
     }
 
-    rect.addEventListener('click', handleRectClick);
-    rect.addEventListener('keydown', event => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        handleRectClick(event);
-      }
-    });
+    if (articleClicksEnabled) {
+      rect.addEventListener('click', handleRectClick);
+      rect.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          handleRectClick(event);
+        }
+      });
+    }
 
     svg.appendChild(rect);
   });
@@ -3253,6 +3324,9 @@ function openAdById(adId) {
 }
 
 function handleRectClick(event) {
+  if (!areArticleClicksEnabled()) {
+    return;
+  }
   if (state.zoom.scale > 1) {
     return;
   }
@@ -3413,6 +3487,7 @@ function applyZoom(surface) {
       zoomMenu.classList.toggle('is-visible', isZoomed);
       zoomMenu.setAttribute('aria-hidden', isZoomed ? 'false' : 'true');
     }
+    updateMobileMenuButtonVisibility();
     updateZoomUI();
     updateNavButtons();
   });
@@ -3730,6 +3805,7 @@ function toggleAllPages(forceOpen) {
     overlay.classList.remove('is-open');
     overlay.setAttribute('aria-hidden', 'true');
   }
+  updateMobileMenuButtonVisibility();
 }
 
 function buildAllPagesGrid() {
@@ -3999,6 +4075,7 @@ function openReadingWindow() {
     readingBackdrop.classList.add('is-visible');
     readingBackdrop.setAttribute('aria-hidden', 'false');
   }
+  updateMobileMenuButtonVisibility();
 }
 
 function closeReadingWindow() {
@@ -4024,6 +4101,7 @@ function closeReadingWindow() {
     state.dom.readingTitle.hidden = true;
     state.dom.readingTitle.setAttribute('aria-hidden', 'true');
   }
+  updateMobileMenuButtonVisibility();
 }
 
 function computeViewBox(res) {

@@ -49,6 +49,7 @@ window.epaperConfig = {
     audioEmptyMessage: { fi: 'Tälle numerolle ei ole kuunneltavaa sisältöä.', en: 'This issue does not have audio content.' },
     audioTimelineLabel: { fi: 'Kuuntelun eteneminen', en: 'Listening progress' }
   },
+  articleClicksEnabled: true,
   navigation: [
     {
       action: 'toggle-menu',

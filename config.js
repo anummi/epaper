@@ -20,6 +20,8 @@ window.epaperConfig = {
     windowedLabel: { fi: 'Sulje koko näyttö', en: 'Exit fullscreen' },
     prevPage: { fi: 'Edellinen sivu', en: 'Previous page' },
     nextPage: { fi: 'Seuraava sivu', en: 'Next page' },
+    pageIndicatorSingle: { fi: 'Sivu {page} / {total}', en: 'Page {page} / {total}' },
+    pageIndicatorRange: { fi: 'Sivut {from}–{to} / {total}', en: 'Pages {from}–{to} / {total}' },
     zoomIn: { fi: 'Zoomaa sisään', en: 'Zoom in' },
     zoomOut: { fi: 'Zoomaa ulos', en: 'Zoom out' },
     closeAllPages: { fi: 'Sulje kaikki sivut', en: 'Close overview' },
@@ -28,6 +30,7 @@ window.epaperConfig = {
     articleLoading: { fi: 'Ladataan sisältöä…', en: 'Loading article…' },
     articleError: { fi: 'Artikkelin lataaminen epäonnistui.', en: 'Failed to load the article.' },
     readingWindowTitle: { fi: 'Lukuikkuna', en: 'Reading window' },
+    readingPosition: { fi: 'Juttu {current} / {total}', en: 'Article {current} / {total}' },
     prevArticle: { fi: 'Edellinen juttu', en: 'Previous article' },
     nextArticle: { fi: 'Seuraava juttu', en: 'Next article' },
     audioPlayerTitle: { fi: 'Kuuntele lehti', en: 'Listen to the issue' },
@@ -60,6 +63,7 @@ window.epaperConfig = {
     {
       action: 'toggle-menu',
       className: 'menu-open',
+      visible: true,
       label: { fi: 'Valikko', en: 'Menu' },
       icon: {
         viewBox: '0 0 448 512',
@@ -69,6 +73,7 @@ window.epaperConfig = {
     {
       action: 'audio',
       className: 'menu-audio',
+      visible: true,
       label: { fi: 'Kuuntele lehti', en: 'Listen' },
       icon: {
         viewBox: '0 0 576 512',
@@ -78,6 +83,7 @@ window.epaperConfig = {
     {
       action: 'fullscreen',
       className: 'menu-fullscreen',
+      visible: true,
       label: { fi: 'Koko näyttö', en: 'Fullscreen' },
       icon: {
         viewBox: '0 0 448 512',
@@ -87,6 +93,7 @@ window.epaperConfig = {
     {
       action: 'exit-fullscreen',
       className: 'menu-windowed',
+      visible: true,
       label: { fi: 'Sulje koko näyttö', en: 'Exit fullscreen' },
       icon: {
         viewBox: '0 0 512 512',
@@ -96,6 +103,7 @@ window.epaperConfig = {
     {
       action: 'toggle-all-pages',
       className: 'menu-all-pages',
+      visible: true,
       label: { fi: 'Kaikki sivut', en: 'All pages' },
       icon: {
         viewBox: '0 0 576 512',
@@ -105,6 +113,7 @@ window.epaperConfig = {
     {
       action: 'ads',
       className: 'menu-ads',
+      visible: true,
       label: { fi: 'Mainokset', en: 'Ads' },
       icon: {
         viewBox: '0 0 640 640',
@@ -114,6 +123,7 @@ window.epaperConfig = {
     {
       action: 'archive',
       className: 'menu-archive',
+      visible: true,
       label: { fi: 'Arkisto', en: 'Archive' },
       icon: {
         viewBox: '0 0 448 512',
@@ -123,6 +133,7 @@ window.epaperConfig = {
     {
       action: 'search',
       className: 'menu-search',
+      visible: true,
       label: { fi: 'Hae', en: 'Search' },
       icon: {
         viewBox: '0 0 512 512',
@@ -132,6 +143,7 @@ window.epaperConfig = {
     {
       action: 'electric',
       className: 'menu-electric',
+      visible: false,
       label: { fi: 'Pörssisähkö', en: 'Electricity' },
       icon: {
         viewBox: '0 0 576 512',
@@ -141,6 +153,7 @@ window.epaperConfig = {
     {
       action: 'weather',
       className: 'menu-weather',
+      visible: true,
       label: { fi: 'Sää', en: 'Weather' },
       icon: {
         viewBox: '0 0 640 512',
@@ -150,6 +163,7 @@ window.epaperConfig = {
     {
       action: 'settings',
       className: 'menu-settings',
+      visible: true,
       label: { fi: 'Asetukset', en: 'Settings' },
       icon: {
         viewBox: '0 0 512 512',
@@ -159,6 +173,7 @@ window.epaperConfig = {
     {
       action: 'instructions',
       className: 'menu-instruction',
+      visible: true,
       label: { fi: 'Ohjeet', en: 'Instructions' },
       icon: {
         viewBox: '0 0 512 512',
@@ -168,6 +183,7 @@ window.epaperConfig = {
     {
       action: 'home-page',
       className: 'menu-home',
+      visible: true,
       label: { fi: 'Kotisivu', en: 'Home page' },
       icon: {
         viewBox: '0 0 640 640',
@@ -176,6 +192,8 @@ window.epaperConfig = {
     }
   ],
   ads: {
+    hoverActionsEnabled: true,
+    allowClicksWhenZoomed: false,
     labels: {
       openLink: { fi: 'Avaa verkkosivusto', en: 'Open website' },
       call: { fi: 'Soita', en: 'Call' },

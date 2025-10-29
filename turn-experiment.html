@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kuukkeli – Flipbook-kokeilu</title>
+    <link rel="stylesheet" href="turn-experiment.css" />
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <link rel="preconnect" href="https://code.jquery.com" crossorigin />
+  </head>
+  <body>
+    <main class="turn-app" aria-live="polite">
+      <header class="turn-app__header">
+        <a class="turn-app__back" href="index.html">← Takaisin pääversioon</a>
+        <h1 class="turn-app__title">Flipbook-kokeilu</h1>
+        <p class="turn-app__subtitle">
+          Turn.js-kirjastoon perustuva luonnos lehden selailusta sivuja kääntämällä.
+        </p>
+      </header>
+      <section class="turn-app__content">
+        <p class="turn-app__status" data-status>Haetaan uusinta lehteä…</p>
+        <div class="turn-viewer" hidden>
+          <div class="turn-controls" aria-hidden="true">
+            <button type="button" class="turn-button" data-action="prev">Edellinen sivu</button>
+            <span class="turn-indicator" data-indicator>Sivu 1 / 1</span>
+            <button type="button" class="turn-button" data-action="next">Seuraava sivu</button>
+          </div>
+          <div class="turn-canvas">
+            <div class="turn-wrapper">
+              <div id="flipbook" class="turn-book"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-3fp9awj4qvQ+YdN0wEfr2E1VlzDq+W8sELpAo7P5p30=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/turn.js/4.1.0/turn.min.js" integrity="sha512-0Ffm+MIw+QxZ9G8fxIUKFvdcGaOeL50DJBSSTXobHxPPH/FkOFjvFsRQAt2bQVWwtIg9Y9ycYzaPt+F6DRCc9w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="config.js"></script>
+    <script src="turn-experiment.js"></script>
+  </body>
+</html>

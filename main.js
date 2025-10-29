@@ -414,6 +414,17 @@ function getHomePageUrl() {
   return getDefaultHomePageUrl();
 }
 
+function getPaperStaticBasePath(configOverride = null) {
+  const config = configOverride || state.config;
+  const id = config?.id;
+  if (!id) {
+    return null;
+  }
+  const basePath = `static/${id}`;
+  const paperSlug = String(config.paper || '').trim();
+  return paperSlug ? `${basePath}/${paperSlug}` : basePath;
+}
+
 function normalizePhoneNumber(value) {
   if (!value) {
     return null;
@@ -442,13 +453,16 @@ function buildAdNavigationQuery(ad) {
 }
 
 function resolveAdImageUrl(adId) {
-  const configId = state.config?.id;
   const issuePath = state.currentIssuePath;
-  if (!configId || !issuePath || !adId) {
+  if (!issuePath || !adId) {
+    return null;
+  }
+  const basePath = getPaperStaticBasePath();
+  if (!basePath) {
     return null;
   }
   const normalized = normalizeArchivePath(issuePath);
-  return `static/${configId}/${normalized}a${adId}`;
+  return `${basePath}/${normalized}a${adId}`;
 }
 
 function createAdActionElement({ key, href = null, target = '_self', rel = null, onClick = null, className = '' }) {
@@ -3249,9 +3263,10 @@ function prepareAudioForIssue() {
 }
 
 async function loadIssueData(config, issuePath) {
-  const basePath = `static/${config.id}`;
-  const paperSlug = String(config.paper || '').trim();
-  const issueRootPath = paperSlug ? `${basePath}/${paperSlug}` : basePath;
+  const issueRootPath = getPaperStaticBasePath(config);
+  if (!issueRootPath) {
+    throw new Error('Lehden polun muodostaminen epäonnistui.');
+  }
   let archiveData = Array.isArray(state.archiveItems) && state.archiveItems.length
     ? state.archiveItems
     : null;
@@ -3262,7 +3277,7 @@ async function loadIssueData(config, issuePath) {
   const sanitizedTargetParam = sanitizeIssueParam(rawIssueParam);
 
   if (!archiveData) {
-    const archiveUrl = `${basePath}/${config.paper}_arch.htm`;
+    const archiveUrl = `${issueRootPath}/${config.paper}_arch.htm`;
     const archiveResponse = await fetch(archiveUrl);
     if (!archiveResponse.ok) {
       throw new Error(`Arkistotiedoston lataus epäonnistui: ${archiveResponse.status}`);
@@ -4374,6 +4389,14 @@ function handleReadingPointerCancel(event) {
 function suppressReadingSwipeClick(event) {
   if (!readingSwipeState.swiped) {
     return;
+  }
+  const target = event.target;
+  if (target instanceof Element) {
+    const interactive = target.closest('a, button, input, textarea, select, [role="button"], [contenteditable="true"]');
+    if (interactive) {
+      readingSwipeState.swiped = false;
+      return;
+    }
   }
   event.preventDefault();
   event.stopPropagation();

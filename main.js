@@ -4103,6 +4103,7 @@ function updatePageIndicator() {
   }
 
   const isZoomed = state.zoom.scale > 1;
+  const showZoomIndicator = isZoomed || shouldKeepZoomMenuVisible();
   const pages = [...current.pages].sort((a, b) => a - b);
   const firstPage = pages[0] + 1;
   const lastPage = pages[pages.length - 1] + 1;
@@ -4128,17 +4129,18 @@ function updatePageIndicator() {
 
   if (indicator) {
     indicator.textContent = text;
-    indicator.hidden = isZoomed;
-    indicator.setAttribute('aria-hidden', isZoomed ? 'true' : 'false');
+    indicator.hidden = showZoomIndicator;
+    indicator.setAttribute('aria-hidden', showZoomIndicator ? 'true' : 'false');
   }
 
   if (zoomLabel) {
     zoomLabel.textContent = text;
+    zoomLabel.hidden = !showZoomIndicator;
+    zoomLabel.setAttribute('aria-hidden', showZoomIndicator ? 'false' : 'true');
   }
 
   if (zoomIndicator) {
     zoomIndicator.textContent = shortText;
-    const showZoomIndicator = isZoomed || shouldKeepZoomMenuVisible();
     zoomIndicator.hidden = !showZoomIndicator;
     zoomIndicator.setAttribute('aria-hidden', showZoomIndicator ? 'false' : 'true');
   }

@@ -335,8 +335,6 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   justify-content: center;
   width: 100%;
   min-height: 100vh;
-  padding-block: var(--stage-padding-block);
-  padding-inline: var(--stage-padding-inline);
   background: radial-gradient(circle at top, rgba(0, 0, 0, 0.06), transparent 55%);
   overflow: hidden;
   touch-action: none;
@@ -632,8 +630,8 @@ body.is-zoomed .maprect {
 }
 
 body.ui-controls-hidden .page-indicator {
-  /* opacity: 0; */
-  /* transform: translate(-50%, 0.75rem); */
+  opacity: 0;
+  transform: translate(-50%, 0.75rem);
 }
 
 body.is-zoomed .page-indicator {

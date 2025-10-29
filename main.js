@@ -1593,6 +1593,7 @@ function attachGlobalListeners() {
     readingNext,
     readingClose,
     readingBackdrop,
+    readingWindow,
     adsPanel,
     adsClose,
     settingsPanel,

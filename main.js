@@ -56,7 +56,8 @@ const state = {
   listenersAttached: false,
   settings: {
     language: 'fi',
-    darkMode: false
+    darkMode: false,
+    persistentZoomControls: false
   },
   audio: {
     queue: [],
@@ -267,6 +268,38 @@ function shouldAllowAdClicksWhenZoomed() {
     return normalized === 'true' || normalized === '1' || normalized === 'yes';
   }
   return Boolean(value);
+}
+
+function getZoomPanelConfig() {
+  return state.config?.zoomPanel || {};
+}
+
+function isZoomPanelSettingVisible() {
+  const value = getZoomPanelConfig().showSetting;
+  if (value == null) {
+    return true;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized !== 'false' && normalized !== '0' && normalized !== 'no';
+  }
+  return Boolean(value);
+}
+
+function getDefaultPersistentZoomControls() {
+  const value = getZoomPanelConfig().persistent;
+  if (value == null) {
+    return false;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'yes';
+  }
+  return Boolean(value);
+}
+
+function shouldKeepZoomMenuVisible() {
+  return Boolean(state.settings?.persistentZoomControls);
 }
 
 function getAdActionLabel(key, fallback = '') {
@@ -702,7 +735,8 @@ function saveSettings() {
   try {
     const payload = {
       language: state.settings.language,
-      darkMode: state.settings.darkMode
+      darkMode: state.settings.darkMode,
+      persistentZoomControls: Boolean(state.settings.persistentZoomControls)
     };
     window.localStorage?.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
@@ -799,6 +833,11 @@ function buildLayout() {
   zoomReset.type = 'button';
   zoomReset.className = 'zoom-button zoom-reset';
   zoomMenu.appendChild(zoomReset);
+  const zoomPageLabel = document.createElement('span');
+  zoomPageLabel.className = 'zoom-menu__page-label';
+  zoomPageLabel.hidden = true;
+  zoomPageLabel.setAttribute('aria-hidden', 'true');
+  zoomMenu.appendChild(zoomPageLabel);
   const zoomPageIndicator = document.createElement('span');
   zoomPageIndicator.className = 'zoom-menu__page-indicator';
   zoomPageIndicator.hidden = true;
@@ -1101,6 +1140,21 @@ function buildLayout() {
   darkModeField.appendChild(darkModeToggle);
   settingsBody.appendChild(languageField);
   settingsBody.appendChild(darkModeField);
+  let zoomControlsField = null;
+  let zoomControlsSpan = null;
+  let zoomControlsToggle = null;
+  if (isZoomPanelSettingVisible()) {
+    zoomControlsField = document.createElement('label');
+    zoomControlsField.className = 'settings-field settings-field--toggle';
+    zoomControlsSpan = document.createElement('span');
+    zoomControlsSpan.className = 'settings-field__label';
+    zoomControlsToggle = document.createElement('input');
+    zoomControlsToggle.type = 'checkbox';
+    zoomControlsToggle.className = 'settings-field__control';
+    zoomControlsField.appendChild(zoomControlsSpan);
+    zoomControlsField.appendChild(zoomControlsToggle);
+    settingsBody.appendChild(zoomControlsField);
+  }
   settingsDialog.appendChild(settingsHeader);
   settingsDialog.appendChild(settingsBody);
   settingsPanel.appendChild(settingsDialog);
@@ -1240,6 +1294,7 @@ function buildLayout() {
     zoomOut,
     zoomIn,
     zoomReset,
+    zoomPageLabel,
     zoomPageIndicator,
     allPages,
     allPagesTitle,
@@ -1281,6 +1336,9 @@ function buildLayout() {
     languageSelect,
     darkModeLabel: darkModeSpan,
     darkModeToggle,
+    zoomControlsField,
+    zoomControlsLabel: zoomControlsSpan,
+    zoomControlsToggle,
     audioBackdrop,
     audioPlayer,
     audioTitle,
@@ -1335,6 +1393,9 @@ function refreshLocalizedTexts(options = {}) {
     const resetLabel = resolveLabel('zoomReset', 'Palauta');
     dom.zoomReset.textContent = resetLabel;
     dom.zoomReset.setAttribute('aria-label', resetLabel);
+  }
+  if (dom.zoomPageLabel) {
+    dom.zoomPageLabel.textContent = resolveLabel('zoomPanelPageLabel', 'Sivut');
   }
 
   if (dom.mobileMenuButton) {
@@ -1418,6 +1479,9 @@ function refreshLocalizedTexts(options = {}) {
   if (dom.darkModeLabel) {
     dom.darkModeLabel.textContent = resolveLabel('settingsDarkMode', 'Tumma tila');
   }
+  if (dom.zoomControlsLabel) {
+    dom.zoomControlsLabel.textContent = resolveLabel('settingsZoomPanel', 'Pidä zoom napit aktiivisena');
+  }
 
   document.documentElement.lang = state.settings.language || 'fi';
 
@@ -1442,15 +1506,20 @@ function applySettings(options = {}) {
   if (!storedLanguage) {
     state.settings.language = normalizeLanguage(state.config?.lang) || 'fi';
   }
-  const { languageSelect, darkModeToggle } = state.dom;
+  const { languageSelect, darkModeToggle, zoomControlsToggle } = state.dom;
   if (languageSelect) {
     languageSelect.value = state.settings.language;
   }
   if (darkModeToggle) {
     darkModeToggle.checked = Boolean(state.settings.darkMode);
   }
+  if (zoomControlsToggle) {
+    zoomControlsToggle.checked = Boolean(state.settings.persistentZoomControls);
+  }
   applyTheme();
   refreshLocalizedTexts({ rebuildNavigation: true });
+  updateZoomUI();
+  applyZoom();
   if (persist) {
     saveSettings();
   }
@@ -1532,6 +1601,9 @@ async function init() {
   const configLanguage = normalizeLanguage(state.config.lang) || 'fi';
   state.settings.language = normalizeLanguage(storedSettings.language) || configLanguage;
   state.settings.darkMode = typeof storedSettings.darkMode === 'boolean' ? storedSettings.darkMode : false;
+  state.settings.persistentZoomControls = typeof storedSettings.persistentZoomControls === 'boolean'
+    ? storedSettings.persistentZoomControls
+    : getDefaultPersistentZoomControls();
 
   applySettings({ persist: false });
   attachGlobalListeners();
@@ -1887,6 +1959,7 @@ function attachGlobalListeners() {
 
   languageSelect?.addEventListener('change', handleLanguageChange);
   darkModeToggle?.addEventListener('change', handleDarkModeChange);
+  zoomControlsToggle?.addEventListener('change', handleZoomControlsToggle);
 
   audioClose?.addEventListener('click', () => stopAudioPlayback());
   audioPrev?.addEventListener('click', () => skipAudio(-1));
@@ -2044,6 +2117,15 @@ function handleDarkModeChange(event) {
     return;
   }
   state.settings.darkMode = nextValue;
+  applySettings();
+}
+
+function handleZoomControlsToggle(event) {
+  const nextValue = Boolean(event?.target?.checked);
+  if (nextValue === shouldKeepZoomMenuVisible()) {
+    return;
+  }
+  state.settings.persistentZoomControls = nextValue;
   applySettings();
 }
 
@@ -3926,6 +4008,7 @@ function applySlideChange(index, options = {}) {
   if (!slides.length || !slides[index]) {
     return;
   }
+  const previousSlide = slides[state.currentSlide] || null;
   positionSlides(index, { immediate });
   state.currentSlide = index;
   const current = slides[index];
@@ -3941,7 +4024,14 @@ function applySlideChange(index, options = {}) {
   }
 
   if (!preserveZoom) {
-    resetZoom();
+    const extras = [];
+    if (previousSlide?.surface && previousSlide.surface !== current.surface) {
+      extras.push(previousSlide.surface);
+    }
+    resetZoom({
+      targetSurface: current.surface || null,
+      additionalSurfaces: extras
+    });
   } else if (current.surface) {
     applyZoom(current.surface);
   }
@@ -4041,8 +4131,9 @@ function updatePageIndicator() {
 
   if (zoomIndicator) {
     zoomIndicator.textContent = shortText;
-    zoomIndicator.hidden = !isZoomed;
-    zoomIndicator.setAttribute('aria-hidden', isZoomed ? 'false' : 'true');
+    const showZoomIndicator = isZoomed || shouldKeepZoomMenuVisible();
+    zoomIndicator.hidden = !showZoomIndicator;
+    zoomIndicator.setAttribute('aria-hidden', showZoomIndicator ? 'false' : 'true');
   }
 }
 
@@ -4051,12 +4142,21 @@ function getActiveSurface() {
   return current ? current.surface : null;
 }
 
-function resetZoom() {
+function resetZoom(options = {}) {
+  const { targetSurface = null, additionalSurfaces = [] } = options;
   state.zoom.scale = 1;
   state.zoom.translateX = 0;
   state.zoom.translateY = 0;
-  const surface = getActiveSurface();
+  const surface = targetSurface instanceof Element ? targetSurface : getActiveSurface();
   applyZoom(surface || null);
+  if (Array.isArray(additionalSurfaces)) {
+    additionalSurfaces.forEach(extra => {
+      if (extra instanceof Element) {
+        extra.style.transform = 'translate(0px, 0px) scale(1)';
+        extra.classList.remove('is-zoomed');
+      }
+    });
+  }
   registerUserActivity();
 }
 
@@ -4116,10 +4216,13 @@ function applyZoom(surface) {
       target.classList.toggle('is-zoomed', isZoomed);
     }
     document.body.classList.toggle('is-zoomed', isZoomed);
-    const zoomMenu = document.querySelector('.zoom-menu');
+    const persistent = shouldKeepZoomMenuVisible();
+    const zoomMenu = state.dom?.zoomMenu || document.querySelector('.zoom-menu');
     if (zoomMenu) {
-      zoomMenu.classList.toggle('is-visible', isZoomed);
-      zoomMenu.setAttribute('aria-hidden', isZoomed ? 'false' : 'true');
+      const shouldShow = isZoomed || persistent;
+      zoomMenu.classList.toggle('is-visible', shouldShow);
+      zoomMenu.classList.toggle('is-persistent', persistent);
+      zoomMenu.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
     }
     updateMobileMenuButtonVisibility();
     updateZoomUI();
@@ -4129,9 +4232,9 @@ function applyZoom(surface) {
 }
 
 function updateZoomUI() {
-  const zoomIn = document.querySelector('.zoom-in');
-  const zoomOut = document.querySelector('.zoom-out');
-  const zoomReset = document.querySelector('.zoom-reset');
+  const { zoomIn, zoomOut, zoomReset, zoomPageLabel, zoomPageIndicator } = state.dom || {};
+  const isZoomed = state.zoom.scale > 1;
+  const persistent = shouldKeepZoomMenuVisible();
 
   if (zoomIn) {
     zoomIn.disabled = state.zoom.scale >= maxScale;
@@ -4140,7 +4243,20 @@ function updateZoomUI() {
     zoomOut.disabled = state.zoom.scale <= minScale;
   }
   if (zoomReset) {
+    const showReset = isZoomed;
+    zoomReset.hidden = !showReset;
+    zoomReset.setAttribute('aria-hidden', showReset ? 'false' : 'true');
     zoomReset.disabled = state.zoom.scale === 1;
+  }
+  if (zoomPageLabel) {
+    const showLabel = persistent && !isZoomed;
+    zoomPageLabel.hidden = !showLabel;
+    zoomPageLabel.setAttribute('aria-hidden', showLabel ? 'false' : 'true');
+  }
+  if (zoomPageIndicator) {
+    const showIndicator = isZoomed || persistent;
+    zoomPageIndicator.hidden = !showIndicator;
+    zoomPageIndicator.setAttribute('aria-hidden', showIndicator ? 'false' : 'true');
   }
 }
 

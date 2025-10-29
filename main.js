@@ -3407,19 +3407,13 @@ function getStageWidth() {
 function positionSlides(activeIndex, { immediate = false } = {}) {
   const slides = state.slides || [];
   const track = state.dom?.pageTrack;
+  const slider = state.dom?.pageSlider;
   const dragging = Boolean(track && track.classList.contains('is-dragging'));
 
   slides.forEach((slide, slideIndex) => {
     if (!slide?.element) {
       return;
     }
-    if (immediate) {
-      slide.element.style.transition = 'none';
-    } else if (!dragging) {
-      slide.element.style.transition = '';
-    }
-    const offset = slideIndex - activeIndex;
-    slide.element.style.transform = `translateX(${offset * 100}%)`;
     slide.element.classList.toggle('is-active', slideIndex === activeIndex);
     slide.element.classList.toggle('is-before', slideIndex < activeIndex);
     slide.element.classList.toggle('is-after', slideIndex > activeIndex);
@@ -3430,28 +3424,40 @@ function positionSlides(activeIndex, { immediate = false } = {}) {
 
   swipeState.progress = 0;
 
+  if (!slider) {
+    return;
+  }
+
+  if (immediate) {
+    slider.style.transition = 'none';
+  } else if (!dragging) {
+    slider.style.transition = '';
+  }
+
+  slider.style.transform = `translate3d(${-activeIndex * 100}%, 0, 0)`;
+
   if (immediate) {
     requestAnimationFrame(() => {
-      slides.forEach(slide => {
-        if (slide?.element) {
-          slide.element.style.transition = '';
-        }
-      });
+      slider.style.transition = '';
     });
   }
 }
 
 function setSlidesInteractive(enabled) {
-  const slides = state.slides || [];
-  slides.forEach(slide => {
-    if (!slide?.element) {
-      return;
-    }
-    slide.element.style.transition = enabled ? 'none' : '';
-    if (!enabled) {
+  const slider = state.dom?.pageSlider;
+  if (slider) {
+    slider.style.transition = enabled ? 'none' : '';
+  }
+
+  if (!enabled) {
+    const slides = state.slides || [];
+    slides.forEach(slide => {
+      if (!slide?.element) {
+        return;
+      }
       slide.element.classList.remove('is-peek');
-    }
-  });
+    });
+  }
 
   const track = state.dom?.pageTrack;
   if (track) {
@@ -3461,16 +3467,20 @@ function setSlidesInteractive(enabled) {
 
 function updateSlideProgress(progress) {
   const slides = state.slides || [];
+  const slider = state.dom?.pageSlider;
   const normalized = Number.isFinite(progress) ? progress : 0;
   const clamped = clamp(normalized, -1, 1);
   swipeState.progress = clamped;
+
+  if (slider) {
+    const offset = -(state.currentSlide + clamped) * 100;
+    slider.style.transform = `translate3d(${offset}%, 0, 0)`;
+  }
 
   slides.forEach((slide, slideIndex) => {
     if (!slide?.element) {
       return;
     }
-    const offset = slideIndex - state.currentSlide - clamped;
-    slide.element.style.transform = `translateX(${offset * 100}%)`;
     const isPeek = (clamped > 0 && slideIndex === state.currentSlide + 1)
       || (clamped < 0 && slideIndex === state.currentSlide - 1);
     slide.element.classList.toggle('is-peek', isPeek);

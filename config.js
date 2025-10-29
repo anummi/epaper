@@ -34,7 +34,6 @@ window.epaperConfig = {
     pageIndicatorRange: { fi: 'Sivut {from}–{to} / {total}', en: 'Pages {from}–{to} / {total}' },
     zoomIn: { fi: 'Zoomaa sisään', en: 'Zoom in' },
     zoomOut: { fi: 'Zoomaa ulos', en: 'Zoom out' },
-    zoomPanelPageLabel: { fi: 'Sivut', en: 'Pages' },
     closeAllPages: { fi: 'Sulje kaikki sivut', en: 'Close overview' },
     closeArchive: { fi: 'Sulje arkisto', en: 'Close archive' },
     closeArticle: { fi: 'Sulje artikkeli', en: 'Close article' },

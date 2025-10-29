@@ -28,6 +28,7 @@ const state = {
   pageMaps: [],
   pageArticles: [],
   pageAds: [],
+  pdfPaths: [],
   articleLookup: new Map(),
   articlePageLookup: new Map(),
   adLookup: new Map(),
@@ -68,6 +69,16 @@ const state = {
     audioElement: null,
     playerVisible: false,
     pendingSeekTime: null
+  },
+  print: {
+    selectedPages: new Set(),
+    isProcessing: false,
+    pdfLibPromise: null
+  },
+  ui: {
+    idleTimer: null,
+    lastActivity: 0,
+    isHidden: false
   },
   dom: {}
 };
@@ -111,6 +122,43 @@ const readingSwipeState = {
   active: false,
   swiped: false
 };
+
+const UI_IDLE_DELAY = 4000;
+const UI_ACTIVITY_THROTTLE = 120;
+
+function setUiControlsHidden(hidden) {
+  if (state.ui.isHidden === hidden) {
+    return;
+  }
+  state.ui.isHidden = hidden;
+  document.body.classList.toggle('ui-controls-hidden', hidden);
+}
+
+function scheduleUiIdleCheck() {
+  if (state.ui.idleTimer) {
+    clearTimeout(state.ui.idleTimer);
+  }
+  state.ui.idleTimer = window.setTimeout(() => {
+    state.ui.idleTimer = null;
+    setUiControlsHidden(true);
+  }, UI_IDLE_DELAY);
+}
+
+function registerUserActivity() {
+  const now = performance.now();
+  if (now - state.ui.lastActivity < UI_ACTIVITY_THROTTLE) {
+    return;
+  }
+  state.ui.lastActivity = now;
+  if (state.ui.isHidden) {
+    setUiControlsHidden(false);
+  }
+  scheduleUiIdleCheck();
+}
+
+function handlePassiveActivityEvent() {
+  registerUserActivity();
+}
 
 function normalizeLanguage(value) {
   if (!value) {
@@ -754,6 +802,45 @@ function buildLayout() {
   allPages.appendChild(allPagesGrid);
   shell.appendChild(allPages);
 
+  const printPanel = document.createElement('aside');
+  printPanel.className = 'print-panel';
+  printPanel.setAttribute('aria-hidden', 'true');
+  const printDialog = document.createElement('div');
+  printDialog.className = 'print-panel__dialog';
+  const printHeader = document.createElement('header');
+  printHeader.className = 'print-panel__header';
+  const printHeadingGroup = document.createElement('div');
+  printHeadingGroup.className = 'print-panel__heading';
+  const printTitle = document.createElement('h2');
+  printTitle.className = 'print-panel__title';
+  printHeadingGroup.appendChild(printTitle);
+  const printSelectAll = document.createElement('button');
+  printSelectAll.type = 'button';
+  printSelectAll.className = 'print-panel__select-all';
+  printHeadingGroup.appendChild(printSelectAll);
+  const printClose = document.createElement('button');
+  printClose.type = 'button';
+  printClose.className = 'print-panel__close';
+  printClose.textContent = '×';
+  printHeader.appendChild(printHeadingGroup);
+  printHeader.appendChild(printClose);
+  const printGrid = document.createElement('div');
+  printGrid.className = 'print-panel__grid';
+  const printFooter = document.createElement('footer');
+  printFooter.className = 'print-panel__footer';
+  const printSelectionInfo = document.createElement('span');
+  printSelectionInfo.className = 'print-panel__selection-info';
+  const printButton = document.createElement('button');
+  printButton.type = 'button';
+  printButton.className = 'print-panel__action';
+  printFooter.appendChild(printSelectionInfo);
+  printFooter.appendChild(printButton);
+  printDialog.appendChild(printHeader);
+  printDialog.appendChild(printGrid);
+  printDialog.appendChild(printFooter);
+  printPanel.appendChild(printDialog);
+  shell.appendChild(printPanel);
+
   const archivePanel = document.createElement('aside');
   archivePanel.className = 'archive-panel';
   archivePanel.setAttribute('aria-hidden', 'true');
@@ -1078,6 +1165,14 @@ function buildLayout() {
     allPagesTitle,
     allPagesClose,
     allPagesGrid,
+    printPanel,
+    printDialog,
+    printTitle,
+    printSelectAll,
+    printClose,
+    printGrid,
+    printSelectionInfo,
+    printButton,
     archivePanel,
     archiveDialog,
     archiveTitle,
@@ -1185,6 +1280,13 @@ function refreshLocalizedTexts(options = {}) {
   }
   dom.allPagesClose?.setAttribute('aria-label', resolveLabel('closeAllPages', 'Sulje kaikki sivut'));
 
+  if (dom.printTitle) {
+    const printLabel = getNavigationLabelByAction('print-pages') || resolveLabel('printTitle', 'Tulosta sivut');
+    dom.printTitle.textContent = printLabel;
+  }
+  dom.printClose?.setAttribute('aria-label', resolveLabel('printClose', 'Sulje tulostus'));
+  dom.printSelectAll?.setAttribute('aria-label', resolveLabel('printSelectAll', 'Valitse kaikki sivut'));
+
   if (dom.archiveTitle) {
     dom.archiveTitle.textContent = resolveLabel('archiveTitle', 'Arkisto');
   }
@@ -1241,6 +1343,7 @@ function refreshLocalizedTexts(options = {}) {
 
   updateFullscreenUI();
   updateZoomUI();
+  updatePrintSelectionUI();
   if (state.archiveLoaded) {
     buildArchiveList();
   }
@@ -1382,6 +1485,12 @@ function applyIssue(issue, options = {}) {
   state.pageMaps = Array.isArray(issue.pageMaps) ? issue.pageMaps : [];
   state.pageArticles = Array.isArray(issue.pageArticles) ? issue.pageArticles : [];
   state.pageAds = Array.isArray(issue.pageAds) ? issue.pageAds : [];
+  state.pdfPaths = state.imagePaths.map(path => {
+    if (typeof path !== 'string') {
+      return null;
+    }
+    return path.replace(/(\.[a-z0-9]+)(\?.*)?$/i, '.pdf$2');
+  });
   state.articleLookup = new Map(state.pageArticles.map(article => [String(article.id), article]));
   state.articlePageLookup = buildArticlePageLookup(state.pageMaps);
   state.articleOrder = state.pageArticles
@@ -1414,12 +1523,16 @@ function applyIssue(issue, options = {}) {
   }
   state.dom.readingWindow?.classList.remove('reading-window--ad');
   state.activePageIndex = targetPageIndex;
+  state.print.selectedPages = new Set(state.imagePaths.map((_, index) => index));
+  setPrintProcessing(false);
 
   toggleAllPages(false);
   closeArchivePanel();
   closeReadingWindow();
   closeSettingsPanel();
+  closePrintPanel();
   buildAllPagesGrid();
+  buildPrintGrid();
   renderSlides();
   updateNavButtons();
   buildArchiveList();
@@ -1519,6 +1632,8 @@ function bindNavigationHandlers() {
     button.addEventListener('click', () => {
       const action = button.dataset.action;
       closeMobileMenu();
+      collapseDesktopMenu();
+      registerUserActivity();
       handleNavigationAction(action);
     });
   });
@@ -1546,6 +1661,9 @@ function handleNavigationAction(action) {
       break;
     case 'archive':
       openArchivePanel();
+      break;
+    case 'print-pages':
+      openPrintPanel();
       break;
     case 'settings':
       openSettingsPanel();
@@ -1587,6 +1705,11 @@ function attachGlobalListeners() {
     zoomReset,
     allPages,
     allPagesClose,
+    printPanel,
+    printClose,
+    printSelectAll,
+    printGrid,
+    printButton,
     archivePanel,
     archiveClose,
     readingPrev,
@@ -1633,6 +1756,16 @@ function attachGlobalListeners() {
       toggleAllPages(false);
     }
   });
+
+  printClose?.addEventListener('click', closePrintPanel);
+  printPanel?.addEventListener('click', event => {
+    if (event.target === printPanel) {
+      closePrintPanel();
+    }
+  });
+  printSelectAll?.addEventListener('click', toggleSelectAllPrintPages);
+  printButton?.addEventListener('click', handlePrintPages);
+  printGrid?.addEventListener('click', handlePrintGridClick);
 
   archiveClose?.addEventListener('click', closeArchivePanel);
   archivePanel?.addEventListener('click', event => {
@@ -1697,11 +1830,24 @@ function attachGlobalListeners() {
   window.addEventListener('resize', handleResize);
   document.addEventListener('pointerdown', handleGlobalPointerDown);
 
+  document.addEventListener('pointermove', handlePassiveActivityEvent, { passive: true });
+  document.addEventListener('pointerdown', handlePassiveActivityEvent);
+  document.addEventListener('wheel', handlePassiveActivityEvent, { passive: true });
+  document.addEventListener('keydown', handlePassiveActivityEvent);
+  document.addEventListener('touchmove', handlePassiveActivityEvent, { passive: true });
+  document.addEventListener('scroll', handlePassiveActivityEvent, true);
+
+  registerUserActivity();
+
   bindNavigationHandlers();
 }
 
 function toggleMenuCollapsed() {
   document.body.classList.toggle('menu-collapsed');
+}
+
+function collapseDesktopMenu() {
+  document.body.classList.add('menu-collapsed');
 }
 
 function shouldHideMobileMenuButton() {
@@ -1727,6 +1873,9 @@ function shouldHideMobileMenuButton() {
     return true;
   }
   if (dom.settingsPanel?.classList.contains('is-open')) {
+    return true;
+  }
+  if (dom.printPanel?.classList.contains('is-open')) {
     return true;
   }
   if (dom.readingWindow?.classList.contains('is-open')) {
@@ -1840,6 +1989,10 @@ function handleKeydown(event) {
     }
     if (state.dom.settingsPanel?.classList.contains('is-open')) {
       closeSettingsPanel();
+      return;
+    }
+    if (state.dom.printPanel?.classList.contains('is-open')) {
+      closePrintPanel();
       return;
     }
     if (state.dom.readingWindow?.classList.contains('is-open')) {
@@ -2135,6 +2288,7 @@ function openArchivePanel() {
   closeSettingsPanel();
   closeReadingWindow();
   closeAdsPanel();
+  closePrintPanel();
   buildArchiveList();
   panel.classList.add('is-open');
   panel.setAttribute('aria-hidden', 'false');
@@ -2194,6 +2348,7 @@ function openAdsPanel() {
   closeArchivePanel();
   closeSettingsPanel();
   closeReadingWindow();
+  closePrintPanel();
   buildAdsPanelContent();
   adsPanel.classList.add('is-open');
   adsPanel.setAttribute('aria-hidden', 'false');
@@ -2234,6 +2389,7 @@ function openSettingsPanel() {
   closeArchivePanel();
   closeReadingWindow();
   closeAdsPanel();
+  closePrintPanel();
   panel.classList.add('is-open');
   panel.setAttribute('aria-hidden', 'false');
   state.dom.languageSelect?.focus({ preventScroll: true });
@@ -3574,6 +3730,7 @@ function updateActiveSlide(index, options = {}) {
   updatePageIndicator();
   updateNavButtons();
   updateLocation();
+  registerUserActivity();
 }
 
 function highlightAllPages() {
@@ -3660,6 +3817,7 @@ function resetZoom() {
   state.zoom.translateY = 0;
   const surface = getActiveSurface();
   applyZoom(surface || null);
+  registerUserActivity();
 }
 
 function adjustZoom(direction) {
@@ -3696,6 +3854,7 @@ function setZoom(scale, focalPoint) {
   state.zoom.translateY = constrained.y;
 
   applyZoom(surface);
+  registerUserActivity();
 }
 
 function applyZoom(surface) {
@@ -4139,6 +4298,7 @@ function toggleAllPages(forceOpen) {
     closeArchivePanel();
     closeSettingsPanel();
     closeAdsPanel();
+    closePrintPanel();
     overlay.classList.add('is-open');
     overlay.setAttribute('aria-hidden', 'false');
     highlightAllPages();
@@ -4148,6 +4308,268 @@ function toggleAllPages(forceOpen) {
     overlay.setAttribute('aria-hidden', 'true');
   }
   updateMobileMenuButtonVisibility();
+}
+
+function getPagePdfUrl(pageIndex) {
+  if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+    return null;
+  }
+  return state.pdfPaths?.[pageIndex] || null;
+}
+
+function buildPrintGrid() {
+  const grid = state.dom.printGrid;
+  if (!grid) {
+    return;
+  }
+  grid.innerHTML = '';
+  if (!Array.isArray(state.imagePaths) || state.imagePaths.length === 0) {
+    return;
+  }
+
+  const altPrefix = state.settings.language === 'en' ? 'Page' : 'Sivu';
+
+  state.imagePaths.forEach((src, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'print-page';
+    button.dataset.pageIndex = String(index);
+
+    const preview = document.createElement('div');
+    preview.className = 'print-page__preview';
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = `${altPrefix} ${index + 1}`;
+    preview.appendChild(img);
+
+    const badge = document.createElement('span');
+    badge.className = 'print-page__badge';
+    badge.textContent = String(index + 1);
+
+    button.appendChild(preview);
+    button.appendChild(badge);
+    grid.appendChild(button);
+  });
+
+  updatePrintSelectionUI();
+}
+
+function updatePrintSelectionUI() {
+  const grid = state.dom.printGrid;
+  const selectAllButton = state.dom.printSelectAll;
+  const info = state.dom.printSelectionInfo;
+  const actionButton = state.dom.printButton;
+  const totalPages = Array.isArray(state.imagePaths) ? state.imagePaths.length : 0;
+  const selectedCount = state.print.selectedPages instanceof Set
+    ? state.print.selectedPages.size
+    : 0;
+
+  if (grid) {
+    const buttons = grid.querySelectorAll('.print-page');
+    buttons.forEach(button => {
+      const index = Number.parseInt(button.dataset.pageIndex || '', 10);
+      const isSelected = state.print.selectedPages.has(index);
+      button.classList.toggle('is-selected', isSelected);
+      button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+    });
+  }
+
+  if (selectAllButton) {
+    const labelKey = selectedCount === totalPages && totalPages > 0
+      ? 'printClearSelection'
+      : 'printSelectAll';
+    selectAllButton.textContent = resolveLabel(labelKey, selectedCount === totalPages && totalPages > 0
+      ? 'Poista valinnat'
+      : 'Valitse kaikki sivut');
+  }
+
+  if (info) {
+    if (selectedCount === 0) {
+      info.textContent = resolveLabel('printSelectionEmpty', 'Ei sivuja valittuna');
+    } else {
+      const template = resolveLabel('printSelectionCount', '{count} sivua valittuna');
+      info.textContent = formatLabel(template, { count: selectedCount });
+    }
+  }
+
+  if (actionButton) {
+    if (state.print.isProcessing) {
+      actionButton.textContent = resolveLabel('printInProgress', 'Valmistellaan…');
+    } else {
+      const template = resolveLabel('printButton', 'Tulosta sivut ({count} kpl)');
+      actionButton.textContent = formatLabel(template, { count: selectedCount });
+    }
+    actionButton.disabled = !selectedCount || state.print.isProcessing;
+  }
+}
+
+function togglePrintSelection(pageIndex) {
+  if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+    return;
+  }
+  if (!(state.print.selectedPages instanceof Set)) {
+    state.print.selectedPages = new Set();
+  }
+  if (state.print.selectedPages.has(pageIndex)) {
+    state.print.selectedPages.delete(pageIndex);
+  } else {
+    state.print.selectedPages.add(pageIndex);
+  }
+  registerUserActivity();
+  updatePrintSelectionUI();
+}
+
+function toggleSelectAllPrintPages() {
+  const totalPages = Array.isArray(state.imagePaths) ? state.imagePaths.length : 0;
+  if (!totalPages) {
+    return;
+  }
+  if (!(state.print.selectedPages instanceof Set)) {
+    state.print.selectedPages = new Set();
+  }
+  if (state.print.selectedPages.size === totalPages) {
+    state.print.selectedPages.clear();
+  } else {
+    state.print.selectedPages = new Set(Array.from({ length: totalPages }, (_, index) => index));
+  }
+  registerUserActivity();
+  updatePrintSelectionUI();
+}
+
+function openPrintPanel() {
+  const panel = state.dom.printPanel;
+  if (!panel) {
+    return;
+  }
+  closeMobileMenu();
+  toggleAllPages(false);
+  closeArchivePanel();
+  closeSettingsPanel();
+  closeReadingWindow();
+  closeAdsPanel();
+  panel.classList.add('is-open');
+  panel.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('print-open');
+  if (!(state.print.selectedPages instanceof Set)) {
+    state.print.selectedPages = new Set();
+  }
+  if (!state.print.selectedPages.size && Array.isArray(state.imagePaths)) {
+    state.print.selectedPages = new Set(state.imagePaths.map((_, index) => index));
+  }
+  updatePrintSelectionUI();
+  updateMobileMenuButtonVisibility();
+  registerUserActivity();
+}
+
+function closePrintPanel() {
+  const panel = state.dom.printPanel;
+  if (!panel) {
+    return;
+  }
+  panel.classList.remove('is-open');
+  panel.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('print-open');
+  updateMobileMenuButtonVisibility();
+}
+
+function setPrintProcessing(isProcessing) {
+  state.print.isProcessing = Boolean(isProcessing);
+  updatePrintSelectionUI();
+}
+
+async function loadPdfLibModule() {
+  if (!state.print.pdfLibPromise) {
+    state.print.pdfLibPromise = import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.esm.min.js')
+      .catch(error => {
+        state.print.pdfLibPromise = null;
+        throw error;
+      });
+  }
+  return state.print.pdfLibPromise;
+}
+
+async function prepareSelectedPagesPdf(pages) {
+  if (!pages.length) {
+    return null;
+  }
+  const { PDFDocument } = await loadPdfLibModule();
+  const mergedPdf = await PDFDocument.create();
+  let appendedPages = 0;
+
+  for (const pageIndex of pages) {
+    const url = getPagePdfUrl(pageIndex);
+    if (!url) {
+      continue;
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`PDF ${url} lataaminen epäonnistui (${response.status}).`);
+    }
+    const bytes = await response.arrayBuffer();
+    const sourcePdf = await PDFDocument.load(bytes);
+    const copiedPages = await mergedPdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
+    copiedPages.forEach(page => {
+      mergedPdf.addPage(page);
+      appendedPages += 1;
+    });
+  }
+
+  if (appendedPages === 0) {
+    throw new Error('Valittuja sivuja ei voitu valmistella tulostusta varten.');
+  }
+
+  const mergedBytes = await mergedPdf.save();
+  return new Blob([mergedBytes], { type: 'application/pdf' });
+}
+
+async function handlePrintPages() {
+  if (state.print.isProcessing) {
+    return;
+  }
+  const pages = Array.from(state.print.selectedPages).sort((a, b) => a - b);
+  if (!pages.length) {
+    return;
+  }
+
+  registerUserActivity();
+  try {
+    setPrintProcessing(true);
+    const blob = await prepareSelectedPagesPdf(pages);
+    if (!blob) {
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const issueSlug = state.currentIssuePath ? state.currentIssuePath.replace(/\/+$/g, '').replace(/\//g, '-') : 'kuukkeli';
+    link.href = url;
+    link.download = `${issueSlug || 'kuukkeli'}-sivut-${pages.length}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Sivujen tulostus epäonnistui:', error);
+    const message = resolveLabel('printError', 'Sivujen lataaminen tulostusta varten epäonnistui.');
+    window.alert(message);
+  } finally {
+    setPrintProcessing(false);
+  }
+}
+
+function handlePrintGridClick(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+  const button = target.closest('.print-page');
+  if (!button) {
+    return;
+  }
+  const pageIndex = Number.parseInt(button.dataset.pageIndex || '', 10);
+  if (!Number.isInteger(pageIndex)) {
+    return;
+  }
+  togglePrintSelection(pageIndex);
 }
 
 function buildAllPagesGrid() {

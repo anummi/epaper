@@ -13,6 +13,15 @@ window.epaperConfig = {
     settingsClose: { fi: 'Sulje asetukset', en: 'Close settings' },
     settingsLanguage: { fi: 'Kieli', en: 'Language' },
     settingsDarkMode: { fi: 'Tumma tila', en: 'Dark mode' },
+    printTitle: { fi: 'Tulosta sivut', en: 'Print pages' },
+    printSelectAll: { fi: 'Valitse kaikki sivut', en: 'Select all pages' },
+    printClearSelection: { fi: 'Poista valinnat', en: 'Clear selection' },
+    printButton: { fi: 'Tulosta sivut ({count} kpl)', en: 'Print pages ({count})' },
+    printSelectionCount: { fi: '{count} sivua valittuna', en: '{count} pages selected' },
+    printSelectionEmpty: { fi: 'Ei sivuja valittuna', en: 'No pages selected' },
+    printInProgress: { fi: 'Valmistellaan…', en: 'Preparing…' },
+    printClose: { fi: 'Sulje tulostus', en: 'Close print panel' },
+    printError: { fi: 'Sivujen lataaminen tulostusta varten epäonnistui.', en: 'Failed to prepare pages for printing.' },
     adsTitle: { fi: 'Mainokset', en: 'Advertisements' },
     closeAds: { fi: 'Sulje mainokset', en: 'Close advertisements' },
     adsEmpty: { fi: 'Lehdessä ei ole mainoksia.', en: 'This issue does not contain advertisements.' },
@@ -158,6 +167,16 @@ window.epaperConfig = {
       icon: {
         viewBox: '0 0 640 512',
         path: 'M371.1 13.1c-1-5.3-4.6-9.8-9.6-11.9s-10.7-1.5-15.2 1.6L256 65.1 165.7 2.8c-4.5-3.1-10.2-3.7-15.2-1.6s-8.6 6.6-9.6 11.9L121 121 13.1 140.8c-5.3 1-9.8 4.6-11.9 9.6s-1.5 10.7 1.6 15.2L65.1 256 2.8 346.3c-3.1 4.5-3.7 10.2-1.6 15.2s6.6 8.6 11.9 9.6L121 391l19.8 107.9c1 5.3 4.6 9.8 9.6 11.9s10.7 1.5 15.2-1.6L256 446.9l90.3 62.3c4.5 3.1 10.2 3.7 15.2 1.6s8.6-6.6 9.6-11.9l9.4-50.9c-11-.4-21.6-2.6-31.3-6.5l-5 27.3-79.1-54.5c-5.5-3.8-12.7-3.8-18.2 0l-79.1 54.5-17.4-94.5c-1.2-6.5-6.3-11.6-12.8-12.8L43.2 344.1l54.5-79.1c3.8-5.5 3.8-12.7 0-18.2L43.2 167.8l94.5-17.4c6.5-1.2 11.6-6.3 12.8-12.8l17.4-94.5 79.1 54.5c5.5 3.8 12.7 3.8 18.2 0l79.1-54.5 17.4 94.5c1.2 6.5 6.3 11.6 12.8 12.8l94.5 17.4-17.1 24.8c4.1-.4 8.2-.7 12.3-.7c8.6 0 17 1 25.1 2.8l20.1-29.2c3.1-4.5 3.7-10.2 1.6-15.2s-6.6-8.6-11.9-9.6L391 121 371.1 13.1zM256 128c-70.7 0-128 57.3-128 128s57.3 128 128 128c12.4 0 24.5-1.8 35.8-5.1c-2.5-8.5-3.8-17.6-3.8-26.9c0-1.9 .1-3.7 .2-5.5C278.1 350 267.3 352 256 352c-53 0-96-43-96-96s43-96 96-96s96 43 96 96c0 1.9-.1 3.7-.2 5.5c3.2-1.1 6.4-2.1 9.7-2.9c4.9-11 11.5-21.1 19.5-29.9C368.6 171.1 317.3 128 256 128zm208 96c-38.7 0-71 27.5-78.4 64c-.5 0-1.1 0-1.6 0c-35.3 0-64 28.7-64 64s28.7 64 64 64H568c39.8 0 72-32.2 72-72s-32.2-72-72-72c-10.1 0-19.7 2.1-28.4 5.8C528.8 246.5 499 224 464 224zm0 32c26.5 0 48 21.5 48 48l0 .8c0 6.5 3.9 12.4 9.9 14.9s13 1.1 17.5-3.6c7.3-7.4 17.4-12 28.6-12c22.1 0 40 17.9 40 40s-17.9 40-40 40H384c-17.7 0-32-14.3-32-32s14.3-32 32-32c3.8 0 7.4 .6 10.7 1.8c5 1.8 10.6 1 14.9-2.2s6.7-8.2 6.5-13.5c0-.7 0-1.4 0-2.1c0-26.5 21.5-48 48-48z'
+      }
+    },
+    {
+      action: 'print-pages',
+      className: 'menu-print',
+      visible: true,
+      label: { fi: 'Tulosta sivu', en: 'Print pages' },
+      icon: {
+        viewBox: '0 0 640 640',
+        path: 'M448 208L496 208L496 170.5C496 153.5 489.3 137.2 477.3 125.2L434.7 82.7C422.7 70.7 406.5 64 389.5 64L208 64C172.7 64 144 92.7 144 128L144 208L192 208L192 128C192 119.2 199.2 112 208 112L389.5 112C393.7 112 397.8 113.7 400.8 116.7L443.3 159.2C446.3 162.2 448 166.3 448 170.5L448 208zM432 432L432 528L208 528L208 432L432 432zM192 384C174.3 384 160 398.3 160 416L160 432L112 432L112 320C112 311.2 119.2 304 128 304L512 304C520.8 304 528 311.2 528 320L528 432L480 432L480 416C480 398.3 465.7 384 448 384L192 384zM480 480L544 480C561.7 480 576 465.7 576 448L576 320C576 284.7 547.3 256 512 256L128 256C92.7 256 64 284.7 64 320L64 448C64 465.7 78.3 480 96 480L160 480L160 544C160 561.7 174.3 576 192 576L448 576C465.7 576 480 561.7 480 544L480 480z'
       }
     },
     {

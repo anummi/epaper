@@ -184,6 +184,15 @@ function getAdIconDefinition(key) {
   return icon;
 }
 
+function getInterfaceIconDefinition(key) {
+  const icons = state.config?.icons || {};
+  const icon = icons[key];
+  if (!icon || !icon.path) {
+    return null;
+  }
+  return icon;
+}
+
 function areArticleClicksEnabled() {
   const value = state.config?.articleClicksEnabled;
   if (value == null) {
@@ -604,6 +613,13 @@ function buildLayout() {
   navPrev.type = 'button';
   navPrev.className = 'nav-button nav-prev';
   stage.appendChild(navPrev);
+  const navPrevIcon = createIconElement(getInterfaceIconDefinition('arrowLeft'));
+  if (navPrevIcon) {
+    navPrevIcon.classList.add('nav-button__icon');
+    navPrev.appendChild(navPrevIcon);
+  } else {
+    navPrev.textContent = '‹';
+  }
 
   const pageTrack = document.createElement('div');
   pageTrack.className = 'page-track';
@@ -614,6 +630,13 @@ function buildLayout() {
   navNext.type = 'button';
   navNext.className = 'nav-button nav-next';
   stage.appendChild(navNext);
+  const navNextIcon = createIconElement(getInterfaceIconDefinition('arrowLeft'));
+  if (navNextIcon) {
+    navNextIcon.classList.add('nav-button__icon', 'nav-button__icon--next');
+    navNext.appendChild(navNextIcon);
+  } else {
+    navNext.textContent = '›';
+  }
 
   const zoomMenu = document.createElement('div');
   zoomMenu.className = 'zoom-menu';
@@ -720,13 +743,31 @@ function buildLayout() {
   const readingPrev = document.createElement('button');
   readingPrev.type = 'button';
   readingPrev.className = 'reading-window__nav-button reading-window__nav-button--prev';
-  readingPrev.innerHTML = '<span aria-hidden="true">←</span>';
+  const readingPrevIcon = createIconElement(getInterfaceIconDefinition('arrowLeft'));
+  if (readingPrevIcon) {
+    readingPrevIcon.classList.add('reading-window__nav-button-icon');
+    readingPrev.appendChild(readingPrevIcon);
+  } else {
+    const fallbackPrev = document.createElement('span');
+    fallbackPrev.setAttribute('aria-hidden', 'true');
+    fallbackPrev.textContent = '←';
+    readingPrev.appendChild(fallbackPrev);
+  }
   readingControls.appendChild(readingPrev);
 
   const readingNext = document.createElement('button');
   readingNext.type = 'button';
   readingNext.className = 'reading-window__nav-button reading-window__nav-button--next';
-  readingNext.innerHTML = '<span aria-hidden="true">→</span>';
+  const readingNextIcon = createIconElement(getInterfaceIconDefinition('arrowLeft'));
+  if (readingNextIcon) {
+    readingNextIcon.classList.add('reading-window__nav-button-icon', 'reading-window__nav-button-icon--next');
+    readingNext.appendChild(readingNextIcon);
+  } else {
+    const fallbackNext = document.createElement('span');
+    fallbackNext.setAttribute('aria-hidden', 'true');
+    fallbackNext.textContent = '→';
+    readingNext.appendChild(fallbackNext);
+  }
   readingControls.appendChild(readingNext);
 
   const readingClose = document.createElement('button');

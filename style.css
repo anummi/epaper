@@ -45,7 +45,7 @@ body {
   --menu-collapsed-width: clamp(4rem, 5vw, 4.75rem);
   --menu-width: var(--menu-expanded-width);
   --menu-translate: 0%;
-  --menu-padding: var(--menu-width);
+  --shell-padding-left: var(--menu-collapsed-width);
   display: flex;
   justify-content: flex-start;
   align-items: stretch;
@@ -58,7 +58,7 @@ body {
 body.is-zoomed {
   overflow: hidden;
   --menu-translate: -100%;
-  --menu-padding: 0px;
+  --shell-padding-left: 0px;
 }
 
 body.audio-player-open {
@@ -77,7 +77,6 @@ body.mobile-menu-open {
 
 body.menu-collapsed {
   --menu-width: var(--menu-collapsed-width);
-  --menu-padding: var(--menu-width);
 }
 
 body.is-fullscreen button.menu-item.menu-fullscreen {
@@ -100,7 +99,7 @@ body:not(.is-fullscreen) button.menu-item.menu-windowed {
   background: var(--surface);
   box-shadow: var(--shadow);
   overflow: hidden;
-  padding-left: var(--menu-padding);
+  padding-left: var(--shell-padding-left);
   transition: padding-left var(--transition-slow);
 }
 
@@ -541,29 +540,28 @@ body.is-zoomed .maprect {
   cursor: pointer;
   transition: background var(--transition), opacity var(--transition);
   color: #fff;
-}
-
-.nav-button::before {
-  content: '';
-  display: inline-block;
-  width: 0.65rem;
-  height: 0.65rem;
-  border: 2px solid currentColor;
-  border-left: 0;
-  border-bottom: 0;
-  transform: rotate(45deg);
+  display: grid;
+  place-items: center;
+  z-index: 45;
 }
 
 .nav-prev {
-  left: clamp(0.5rem, 2vw, 1.5rem);
-}
-
-.nav-prev::before {
-  transform: rotate(-135deg);
+  left: clamp(1.25rem, 4vw, 3rem);
 }
 
 .nav-next {
-  right: clamp(0.5rem, 2vw, 1.5rem);
+  right: clamp(1.25rem, 4vw, 3rem);
+}
+
+.nav-button__icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  fill: currentColor;
+  transition: transform var(--transition);
+}
+
+.nav-button__icon--next {
+  transform: rotate(180deg);
 }
 
 .nav-button:disabled {
@@ -866,6 +864,17 @@ body.theme-dark .reading-backdrop {
   cursor: pointer;
   transition: background var(--transition), color var(--transition), opacity var(--transition);
   line-height: 1;
+}
+
+.reading-window__nav-button-icon {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+  transition: transform var(--transition);
+}
+
+.reading-window__nav-button-icon--next {
+  transform: rotate(180deg);
 }
 
 .reading-window__nav-button:disabled {
@@ -1892,7 +1901,7 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
 
 @media (max-width: 900px) {
   body {
-    --menu-padding: 0;
+    --shell-padding-left: 0;
   }
 
   .app-shell {

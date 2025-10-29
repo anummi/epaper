@@ -351,6 +351,21 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   justify-content: center;
 }
 
+.turn-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.turn-book {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 .page-slide {
   position: absolute;
   inset: 0;
@@ -366,6 +381,16 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   opacity: 1;
   pointer-events: auto;
   z-index: 10;
+}
+
+.turn-enabled .page-slide {
+  opacity: 1;
+  pointer-events: auto;
+  transition: none;
+}
+
+.turn-enabled .page-slide.is-active {
+  z-index: auto;
 }
 
 .page-surface {

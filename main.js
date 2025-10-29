@@ -1,5 +1,13 @@
 'use strict';
 
+if (typeof window !== 'undefined' && window.__externalLibsReady) {
+  try {
+    await window.__externalLibsReady;
+  } catch (error) {
+    console.warn('[TurnDebug] Ulkoisten kirjastojen lataaminen epäonnistui.', error);
+  }
+}
+
 const maxScale = 4;
 const minScale = 1;
 const scaleStep = 0.5;
@@ -3393,8 +3401,10 @@ function renderSlides() {
   }
 
   requestAnimationFrame(() => {
+    console.log('[TurnDebug] Kaappaus aloitetaan, dioja:', slides.length, 'kohdeindeksi:', targetIndex);
     slides.forEach(slide => captureBaseSize(slide.surface));
     const initialized = initializeTurnBook(targetIndex);
+    console.log('[TurnDebug] Turn-initialisointi valmis, onnistuiko:', initialized);
     if (!initialized) {
       applySlideChange(targetIndex, { preserveZoom: false });
     }
@@ -3442,9 +3452,11 @@ function destroyTurnBook() {
 function initializeTurnBook(initialIndex) {
   const turnBook = state.dom?.turnBook;
   if (!turnBook) {
+    console.log('[TurnDebug] TurnBook puuttuu alustuksessa.');
     return false;
   }
   if (!isTurnAvailable()) {
+    console.log('[TurnDebug] jQuery.fn.turn ei ole saatavilla.');
     destroyTurnBook();
     return false;
   }
@@ -3463,12 +3475,14 @@ function initializeTurnBook(initialIndex) {
       turned: (event, page) => handleTurnTurned(event, page)
     }
   };
+  console.log('[TurnDebug] Turn-vaihtoehdot', { safeIndex, size, options });
   if (size) {
     options.width = size.width;
     options.height = size.height;
   }
   try {
     $turnBook.turn(options);
+    console.log('[TurnDebug] turn.js alustettu onnistuneesti.');
   } catch (error) {
     console.warn('Turn.js:n alustaminen epäonnistui:', error);
     destroyTurnBook();
@@ -3487,12 +3501,14 @@ function initializeTurnBook(initialIndex) {
     state.turn.pending = { index: safeIndex, options: { preserveZoom: false } };
     try {
       $turnBook.turn('page', initialPage);
+      console.log('[TurnDebug] Turn siirtyi aloitussivulle', initialPage);
     } catch (error) {
       console.warn('Turn.js ei pystynyt siirtymään aloitussivulle:', error);
       state.turn.pending = null;
       applySlideChange(safeIndex, { preserveZoom: false });
     }
   } else {
+    console.log('[TurnDebug] Turn oli jo oikealla sivulla', currentPage);
     applySlideChange(safeIndex, { preserveZoom: false });
   }
 
@@ -3547,6 +3563,7 @@ function updateTurnBookSize() {
 
 function handleTurnTurning(event, page) {
   const index = Math.max(0, (Number(page) || 1) - 1);
+  console.log('[TurnDebug] turning-event', { page, index });
   if (!state.turn) {
     state.turn = { instance: null, pending: null };
   }
@@ -3560,6 +3577,7 @@ function handleTurnTurning(event, page) {
 
 function handleTurnTurned(event, page) {
   const index = Math.max(0, (Number(page) || 1) - 1);
+  console.log('[TurnDebug] turned-event', { page, index });
   const pending = state.turn?.pending;
   const options = pending && pending.index === index ? pending.options || {} : {};
   if (state.turn) {
@@ -3986,11 +4004,14 @@ function updateActiveSlide(index, options = {}) {
     const targetPage = index + 1;
     const currentPage = Number(instance.turn('page')) || 0;
     state.turn.pending = { index, options };
+    console.log('[TurnDebug] Pyydetty sivu', targetPage, 'nykyinen sivu', currentPage);
     if (currentPage === targetPage) {
+      console.log('[TurnDebug] Turn on jo oikeassa sivussa, käsitellään turned');
       handleTurnTurned(null, targetPage);
     } else {
       try {
         instance.turn('page', targetPage);
+        console.log('[TurnDebug] Turn-komento annettu sivulle', targetPage);
       } catch (error) {
         console.warn('Sivun vaihtaminen turn.js:llä epäonnistui:', error);
         state.turn.pending = null;
@@ -3999,6 +4020,7 @@ function updateActiveSlide(index, options = {}) {
     }
     return;
   }
+  console.log('[TurnDebug] Turn-instanssia ei ole, käytetään fallbackia.');
   applySlideChange(index, options);
 }
 

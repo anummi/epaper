@@ -65,6 +65,10 @@ body.audio-player-open {
   overflow: hidden;
 }
 
+body.mobile-menu-open {
+  overflow: hidden;
+}
+
 .reading-window.is-open,
 .reading-window__content,
 .reading-window__content * {
@@ -109,7 +113,7 @@ body:not(.is-fullscreen) button.menu-item.menu-windowed {
   align-items: stretch;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  z-index: 30;
+  z-index: 60;
   min-height: 100vh;
   width: var(--menu-width);
   overflow: hidden;
@@ -148,6 +152,83 @@ body:not(.menu-collapsed) .menu-bar {
   body {
     --menu-expanded-width: clamp(10rem, 60vw, 12rem);
   }
+}
+
+.mobile-menu-button {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: none;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.22);
+  z-index: 70;
+  transition: transform var(--transition), box-shadow var(--transition), background var(--transition);
+}
+
+.mobile-menu-button:focus-visible,
+.mobile-menu-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.28);
+}
+
+.mobile-menu-button__icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.mobile-menu-button__label {
+  font-size: 0.95rem;
+}
+
+.mobile-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition);
+  z-index: 50;
+  display: none;
+}
+
+.mobile-menu-backdrop[aria-hidden="false"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-menu-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  border: none;
+  background: rgba(15, 23, 42, 0.08);
+  color: inherit;
+  font-size: 1.6rem;
+  font-weight: 600;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition), transform var(--transition);
+  z-index: 1;
+}
+
+.mobile-menu-close:hover,
+.mobile-menu-close:focus-visible {
+  background: rgba(0, 87, 184, 0.18);
+  transform: translateY(-1px);
 }
 
 .menu-item {
@@ -266,6 +347,7 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   transform-origin: center center;
   transition: transform 120ms ease-out;
   touch-action: none;
+  will-change: transform;
   --page-count: 1;
   --spread-ratio: calc(var(--page-ratio, 0.75) * var(--page-count, 1));
   width: min(
@@ -283,6 +365,7 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
 
 .page-surface.is-zoomed {
   cursor: grab;
+  transition: none;
 }
 
 .page-surface.is-zoomed:active {
@@ -374,6 +457,30 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   transform: translateY(0);
   pointer-events: auto;
   z-index: 5;
+}
+
+body.is-zoomed .ad-hotspot,
+body.is-zoomed .ad-hotspot .ad-actions,
+body.is-zoomed .ad-action {
+  pointer-events: none !important;
+}
+
+body.is-zoomed .ad-hotspot {
+  cursor: default;
+}
+
+body.is-zoomed .ad-hotspot::after,
+body.is-zoomed .ad-hotspot.is-active::after,
+body.is-zoomed .ad-hotspot:focus-visible::after,
+body.is-zoomed .ad-hotspot:hover::after,
+body.is-zoomed .ad-hotspot:focus-within::after {
+  opacity: 0;
+  border-color: transparent;
+}
+
+body.is-zoomed .ad-hotspot .ad-actions {
+  opacity: 0;
+  transform: translateY(-0.5rem);
 }
 
 .ad-action {
@@ -1781,6 +1888,49 @@ body.theme-dark .settings-field--toggle .settings-field__control {
 
 body.theme-dark .settings-field--toggle .settings-field__control::after {
   background: #fff;
+}
+
+@media (max-width: 900px) {
+  body {
+    --menu-padding: 0;
+  }
+
+  .app-shell {
+    padding-left: 0;
+  }
+
+  .menu-bar {
+    width: min(18rem, 80vw);
+    transform: translateX(-110%);
+    box-shadow: none;
+  }
+
+  body.mobile-menu-open .menu-bar {
+    transform: translateX(0);
+    box-shadow: 18px 0 35px rgba(15, 23, 42, 0.18);
+  }
+
+  .mobile-menu-button {
+    display: inline-flex;
+  }
+
+  body.mobile-menu-open .mobile-menu-button {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.92);
+  }
+
+  .mobile-menu-backdrop {
+    display: block;
+  }
+
+  .mobile-menu-close {
+    display: inline-flex;
+  }
+
+  .menu-bar .menu-content {
+    padding-top: calc(clamp(1rem, 2vw, 1.5rem) + 2.75rem);
+  }
 }
 
 @media (max-width: 960px) {

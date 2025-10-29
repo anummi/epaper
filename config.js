@@ -1,3 +1,4 @@
+
 window.epaperConfig = {
   id: 8,
   paper: 'Kuukkeli',
@@ -13,7 +14,6 @@ window.epaperConfig = {
     settingsClose: { fi: 'Sulje asetukset', en: 'Close settings' },
     settingsLanguage: { fi: 'Kieli', en: 'Language' },
     settingsDarkMode: { fi: 'Tumma tila', en: 'Dark mode' },
-    settingsZoomPanel: { fi: 'Pidä zoom napit aktiivisena', en: 'Keep zoom controls visible' },
     printTitle: { fi: 'Tulosta sivut', en: 'Print pages' },
     printSelectAll: { fi: 'Valitse kaikki sivut', en: 'Select all pages' },
     printClearSelection: { fi: 'Poista valinnat', en: 'Clear selection' },
@@ -69,10 +69,6 @@ window.epaperConfig = {
     }
   },
   articleClicksEnabled: true,
-  zoomPanel: {
-    persistent: true,
-    showSetting: true
-  },
   navigation: [
     {
       action: 'toggle-menu',

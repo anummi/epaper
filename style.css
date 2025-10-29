@@ -308,6 +308,7 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   padding-inline: var(--stage-padding-inline);
   background: radial-gradient(circle at top, rgba(0, 0, 0, 0.06), transparent 55%);
   overflow: hidden;
+  touch-action: none;
 }
 
 .page-track {
@@ -546,7 +547,7 @@ body.is-zoomed .maprect {
 
 .page-indicator {
   position: absolute;
-  bottom: clamp(1rem, 4vh, 2.5rem);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(1.25rem, 4vh, 2.75rem));
   left: 50%;
   transform: translateX(-50%);
   background: rgba(15, 23, 42, 0.85);
@@ -561,6 +562,10 @@ body.is-zoomed .maprect {
   box-shadow: 0 18px 30px rgba(15, 23, 42, 0.25);
   transition: opacity var(--transition), transform var(--transition);
   z-index: 46;
+}
+
+body.is-zoomed .page-indicator {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(1.25rem, 4vh, 2.75rem) + 3.5rem);
 }
 
 body.theme-dark .page-indicator {
@@ -611,7 +616,7 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
 
 .zoom-menu {
   position: fixed;
-  bottom: 2rem;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 2rem);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -947,6 +952,7 @@ body.theme-dark .reading-backdrop {
   overflow-y: auto;
   padding: clamp(1rem, 3vw, 1.5rem);
   color: var(--text);
+  touch-action: pan-y;
 }
 
 .reading-window__content img {
@@ -1595,7 +1601,7 @@ body.is-zoomed .menu-bar {
 }
 
 body.is-zoomed .zoom-menu {
-  bottom: 1.25rem;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 1.25rem);
 }
 
 .archive-panel {

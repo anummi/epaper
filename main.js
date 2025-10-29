@@ -32,8 +32,6 @@ const state = {
   pdfPaths: [],
   articleLookup: new Map(),
   articlePageLookup: new Map(),
-  articleContent: new Map(),
-  articleContentPromise: null,
   adLookup: new Map(),
   adPageLookup: new Map(),
   archiveItems: [],
@@ -58,8 +56,7 @@ const state = {
   listenersAttached: false,
   settings: {
     language: 'fi',
-    darkMode: false,
-    persistentZoomControls: false
+    darkMode: false
   },
   audio: {
     queue: [],
@@ -115,10 +112,7 @@ const swipeState = {
   startY: 0,
   startTime: 0,
   isTracking: false,
-  isSwipe: false,
-  active: false,
-  mode: 'free',
-  progress: 0
+  isSwipe: false
 };
 
 const readingSwipeState = {
@@ -270,38 +264,6 @@ function shouldAllowAdClicksWhenZoomed() {
     return normalized === 'true' || normalized === '1' || normalized === 'yes';
   }
   return Boolean(value);
-}
-
-function getZoomPanelConfig() {
-  return state.config?.zoomPanel || {};
-}
-
-function isZoomPanelSettingVisible() {
-  const value = getZoomPanelConfig().showSetting;
-  if (value == null) {
-    return true;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    return normalized !== 'false' && normalized !== '0' && normalized !== 'no';
-  }
-  return Boolean(value);
-}
-
-function getDefaultPersistentZoomControls() {
-  const value = getZoomPanelConfig().persistent;
-  if (value == null) {
-    return false;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    return normalized === 'true' || normalized === '1' || normalized === 'yes';
-  }
-  return Boolean(value);
-}
-
-function shouldKeepZoomMenuVisible() {
-  return Boolean(state.settings?.persistentZoomControls);
 }
 
 function getAdActionLabel(key, fallback = '') {
@@ -737,8 +699,7 @@ function saveSettings() {
   try {
     const payload = {
       language: state.settings.language,
-      darkMode: state.settings.darkMode,
-      persistentZoomControls: Boolean(state.settings.persistentZoomControls)
+      darkMode: state.settings.darkMode
     };
     window.localStorage?.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
@@ -824,7 +785,7 @@ function buildLayout() {
   const zoomOut = document.createElement('button');
   zoomOut.type = 'button';
   zoomOut.className = 'zoom-button zoom-out';
-  zoomOut.textContent = '−';
+  zoomOut.textContent = '-';
   zoomMenu.appendChild(zoomOut);
   const zoomIn = document.createElement('button');
   zoomIn.type = 'button';
@@ -835,11 +796,6 @@ function buildLayout() {
   zoomReset.type = 'button';
   zoomReset.className = 'zoom-button zoom-reset';
   zoomMenu.appendChild(zoomReset);
-  const zoomPageLabel = document.createElement('span');
-  zoomPageLabel.className = 'zoom-menu__page-label';
-  zoomPageLabel.hidden = true;
-  zoomPageLabel.setAttribute('aria-hidden', 'true');
-  zoomMenu.appendChild(zoomPageLabel);
   const zoomPageIndicator = document.createElement('span');
   zoomPageIndicator.className = 'zoom-menu__page-indicator';
   zoomPageIndicator.hidden = true;
@@ -861,7 +817,7 @@ function buildLayout() {
   const mobileMenuIcon = document.createElement('span');
   mobileMenuIcon.className = 'mobile-menu-button__icon';
   mobileMenuIcon.setAttribute('aria-hidden', 'true');
-  mobileMenuIcon.textContent = '☰';
+  mobileMenuIcon.textContent = '?';
   const mobileMenuLabel = document.createElement('span');
   mobileMenuLabel.className = 'mobile-menu-button__label visually-hidden';
   mobileMenuLabel.setAttribute('aria-hidden', 'true');
@@ -996,7 +952,7 @@ function buildLayout() {
   } else {
     const fallbackPrev = document.createElement('span');
     fallbackPrev.setAttribute('aria-hidden', 'true');
-    fallbackPrev.textContent = '←';
+    fallbackPrev.textContent = '?';
     readingPrev.appendChild(fallbackPrev);
   }
   readingControls.appendChild(readingPrev);
@@ -1011,7 +967,7 @@ function buildLayout() {
   } else {
     const fallbackNext = document.createElement('span');
     fallbackNext.setAttribute('aria-hidden', 'true');
-    fallbackNext.textContent = '→';
+    fallbackNext.textContent = '?';
     readingNext.appendChild(fallbackNext);
   }
   readingControls.appendChild(readingNext);
@@ -1142,21 +1098,6 @@ function buildLayout() {
   darkModeField.appendChild(darkModeToggle);
   settingsBody.appendChild(languageField);
   settingsBody.appendChild(darkModeField);
-  let zoomControlsField = null;
-  let zoomControlsSpan = null;
-  let zoomControlsToggle = null;
-  if (isZoomPanelSettingVisible()) {
-    zoomControlsField = document.createElement('label');
-    zoomControlsField.className = 'settings-field settings-field--toggle';
-    zoomControlsSpan = document.createElement('span');
-    zoomControlsSpan.className = 'settings-field__label';
-    zoomControlsToggle = document.createElement('input');
-    zoomControlsToggle.type = 'checkbox';
-    zoomControlsToggle.className = 'settings-field__control';
-    zoomControlsField.appendChild(zoomControlsSpan);
-    zoomControlsField.appendChild(zoomControlsToggle);
-    settingsBody.appendChild(zoomControlsField);
-  }
   settingsDialog.appendChild(settingsHeader);
   settingsDialog.appendChild(settingsBody);
   settingsPanel.appendChild(settingsDialog);
@@ -1205,17 +1146,17 @@ function buildLayout() {
   const audioPrev = document.createElement('button');
   audioPrev.type = 'button';
   audioPrev.className = 'audio-player__button audio-player__button--prev';
-  audioPrev.innerHTML = '<span aria-hidden="true">⏮</span>';
+  audioPrev.innerHTML = '<span aria-hidden="true">?</span>';
 
   const audioPlay = document.createElement('button');
   audioPlay.type = 'button';
   audioPlay.className = 'audio-player__button audio-player__button--play';
-  audioPlay.innerHTML = '<span aria-hidden="true">▶</span>';
+  audioPlay.innerHTML = '<span aria-hidden="true">?</span>';
 
   const audioNext = document.createElement('button');
   audioNext.type = 'button';
   audioNext.className = 'audio-player__button audio-player__button--next';
-  audioNext.innerHTML = '<span aria-hidden="true">⏭</span>';
+  audioNext.innerHTML = '<span aria-hidden="true">?</span>';
 
   audioControls.appendChild(audioPrev);
   audioControls.appendChild(audioPlay);
@@ -1296,7 +1237,6 @@ function buildLayout() {
     zoomOut,
     zoomIn,
     zoomReset,
-    zoomPageLabel,
     zoomPageIndicator,
     allPages,
     allPagesTitle,
@@ -1338,9 +1278,6 @@ function buildLayout() {
     languageSelect,
     darkModeLabel: darkModeSpan,
     darkModeToggle,
-    zoomControlsField,
-    zoomControlsLabel: zoomControlsSpan,
-    zoomControlsToggle,
     audioBackdrop,
     audioPlayer,
     audioTitle,
@@ -1364,7 +1301,6 @@ function buildLayout() {
 
   refreshMobileMenuAccessibility();
   updateAudioUI();
-  positionZoomMenu();
 }
 
 function applyTheme() {
@@ -1397,6 +1333,7 @@ function refreshLocalizedTexts(options = {}) {
     dom.zoomReset.textContent = resetLabel;
     dom.zoomReset.setAttribute('aria-label', resetLabel);
   }
+
   if (dom.mobileMenuButton) {
     const openLabel = resolveLabel('openMenu', 'Avaa valikko');
     dom.mobileMenuButton.setAttribute('aria-label', openLabel);
@@ -1478,9 +1415,6 @@ function refreshLocalizedTexts(options = {}) {
   if (dom.darkModeLabel) {
     dom.darkModeLabel.textContent = resolveLabel('settingsDarkMode', 'Tumma tila');
   }
-  if (dom.zoomControlsLabel) {
-    dom.zoomControlsLabel.textContent = resolveLabel('settingsZoomPanel', 'Pidä zoom napit aktiivisena');
-  }
 
   document.documentElement.lang = state.settings.language || 'fi';
 
@@ -1505,20 +1439,15 @@ function applySettings(options = {}) {
   if (!storedLanguage) {
     state.settings.language = normalizeLanguage(state.config?.lang) || 'fi';
   }
-  const { languageSelect, darkModeToggle, zoomControlsToggle } = state.dom;
+  const { languageSelect, darkModeToggle } = state.dom;
   if (languageSelect) {
     languageSelect.value = state.settings.language;
   }
   if (darkModeToggle) {
     darkModeToggle.checked = Boolean(state.settings.darkMode);
   }
-  if (zoomControlsToggle) {
-    zoomControlsToggle.checked = Boolean(state.settings.persistentZoomControls);
-  }
   applyTheme();
   refreshLocalizedTexts({ rebuildNavigation: true });
-  updateZoomUI();
-  applyZoom();
   if (persist) {
     saveSettings();
   }
@@ -1600,9 +1529,6 @@ async function init() {
   const configLanguage = normalizeLanguage(state.config.lang) || 'fi';
   state.settings.language = normalizeLanguage(storedSettings.language) || configLanguage;
   state.settings.darkMode = typeof storedSettings.darkMode === 'boolean' ? storedSettings.darkMode : false;
-  state.settings.persistentZoomControls = typeof storedSettings.persistentZoomControls === 'boolean'
-    ? storedSettings.persistentZoomControls
-    : getDefaultPersistentZoomControls();
 
   applySettings({ persist: false });
   attachGlobalListeners();
@@ -1617,23 +1543,6 @@ async function init() {
   } finally {
     requestAnimationFrame(() => document.body.classList.add('menu-animated'));
   }
-}
-
-function storeArticleContent(entries) {
-  state.articleContent = new Map();
-  if (!Array.isArray(entries)) {
-    return;
-  }
-  entries.forEach(entry => {
-    if (!entry || entry.id == null || !Array.isArray(entry.ops)) {
-      return;
-    }
-    const key = String(entry.id);
-    if (!key) {
-      return;
-    }
-    state.articleContent.set(key, entry);
-  });
 }
 
 function applyIssue(issue, options = {}) {
@@ -1665,8 +1574,6 @@ function applyIssue(issue, options = {}) {
   state.articleOrder = state.pageArticles
     .map(article => String(article.id))
     .filter(id => Boolean(id));
-  storeArticleContent(issue.articleContent);
-  state.articleContentPromise = null;
   prepareAudioForIssue();
   state.currentArticleId = null;
   state.currentAdId = null;
@@ -1896,7 +1803,6 @@ function attachGlobalListeners() {
     settingsClose,
     languageSelect,
     darkModeToggle,
-    zoomControlsToggle,
     audioBackdrop,
     audioClose,
     audioPrev,
@@ -1978,7 +1884,6 @@ function attachGlobalListeners() {
 
   languageSelect?.addEventListener('change', handleLanguageChange);
   darkModeToggle?.addEventListener('change', handleDarkModeChange);
-  zoomControlsToggle?.addEventListener('change', handleZoomControlsToggle);
 
   audioClose?.addEventListener('click', () => stopAudioPlayback());
   audioPrev?.addEventListener('click', () => skipAudio(-1));
@@ -2019,12 +1924,10 @@ function attachGlobalListeners() {
 
 function toggleMenuCollapsed() {
   document.body.classList.toggle('menu-collapsed');
-  positionZoomMenu();
 }
 
 function collapseDesktopMenu() {
   document.body.classList.add('menu-collapsed');
-  positionZoomMenu();
 }
 
 function shouldHideMobileMenuButton() {
@@ -2096,7 +1999,6 @@ function openMobileMenu() {
   }
   document.body.classList.add('mobile-menu-open');
   refreshMobileMenuAccessibility();
-  positionZoomMenu();
   const firstItem = state.dom?.menuContent?.querySelector('.menu-item');
   if (firstItem instanceof HTMLElement) {
     firstItem.focus({ preventScroll: true });
@@ -2110,7 +2012,6 @@ function closeMobileMenu(options = {}) {
   }
   document.body.classList.remove('mobile-menu-open');
   refreshMobileMenuAccessibility();
-  positionZoomMenu();
   const focusTrigger = Boolean(options.focusTrigger);
   if (focusTrigger && state.dom?.mobileMenuButton instanceof HTMLElement) {
     state.dom.mobileMenuButton.focus({ preventScroll: true });
@@ -2140,15 +2041,6 @@ function handleDarkModeChange(event) {
     return;
   }
   state.settings.darkMode = nextValue;
-  applySettings();
-}
-
-function handleZoomControlsToggle(event) {
-  const nextValue = Boolean(event?.target?.checked);
-  if (nextValue === shouldKeepZoomMenuVisible()) {
-    return;
-  }
-  state.settings.persistentZoomControls = nextValue;
   applySettings();
 }
 
@@ -2453,9 +2345,17 @@ function openArticleById(articleId) {
   state.dom.readingWindow?.classList.remove('reading-window--ad');
   deactivateAllAdHotspots();
   focusPageForArticle(id, { keepReadingOpen: true });
+  const heading = state.dom.readingTitle;
+  if (heading) {
+    heading.textContent = '';
+    heading.hidden = true;
+    heading.setAttribute('aria-hidden', 'true');
+  }
   state.currentArticleId = id;
   updateReadingNavigation();
-  loadArticleContent(article);
+  if (article.url) {
+    loadArticleContent(article.url);
+  }
 }
 
 function openArchivePanel() {
@@ -2606,12 +2506,10 @@ function handleResize() {
       state.zoom.translateX = constrained.x;
       state.zoom.translateY = constrained.y;
       applyZoom(surface);
-      updateSlideLayout();
     }
     updateAllPagesSizing();
     refreshAdsPanelLayout();
     refreshMobileMenuAccessibility();
-    positionZoomMenu();
   }, 180);
 }
 
@@ -3143,8 +3041,8 @@ function updateAudioUI() {
     audioPlay.disabled = !queue.length || state.audio.resumePromptVisible;
     const playing = state.audio.isPlaying;
     audioPlay.innerHTML = playing
-      ? '<span aria-hidden="true">❚❚</span>'
-      : '<span aria-hidden="true">▶</span>';
+      ? '<span aria-hidden="true">??</span>'
+      : '<span aria-hidden="true">?</span>';
     audioPlay.setAttribute('aria-label', playing
       ? resolveLabel('audioPauseLabel', 'Tauota')
       : resolveLabel('audioPlayLabel', 'Toista'));
@@ -3431,27 +3329,12 @@ async function loadIssueData(config, issuePath) {
     (_, index) => `${issueRootPath}/${selectedEntry.p}hp${index + 1}.webp`
   );
 
-  let articleContent = [];
-  const articlesUrl = `${issueRootPath}/${selectedEntry.p}articles.json`;
-  try {
-    const articlesResponse = await fetch(articlesUrl);
-    if (articlesResponse.ok) {
-      const parsedArticles = await articlesResponse.json();
-      if (Array.isArray(parsedArticles)) {
-        articleContent = parsedArticles;
-      }
-    }
-  } catch (error) {
-    console.warn('Artikkelien sisällön lataaminen epäonnistui, käytetään verkko-osoitetta.', error);
-  }
-
   return {
     imagePaths,
     previewImagePaths,
     pageMaps: issueData.pageMaps || [],
     pageArticles: issueData.pageArticles || [],
     pageAds: issueData.pageAds || [],
-    articleContent,
     res: issueData.res,
     archiveItems: archiveData,
     path: normalizeArchivePath(selectedEntry.p),
@@ -3475,140 +3358,22 @@ function renderSlides() {
   state.slideDefinitions = definitions;
 
   const pageTrack = document.querySelector('.page-track');
-  if (!pageTrack) {
-    return;
-  }
-
   pageTrack.innerHTML = '';
 
-  if (!state.dom) {
-    state.dom = {};
-  }
-
-  state.dom.pageTrack = pageTrack;
-  pageTrack.classList.remove('is-dragging');
-
-  const slider = document.createElement('div');
-  slider.className = 'page-slider';
-  pageTrack.appendChild(slider);
-  state.dom.pageSlider = slider;
-
   const slides = definitions.map(pages => createSlide(pages));
-  slides.forEach(slide => slider.appendChild(slide.element));
+  slides.forEach(slide => pageTrack.appendChild(slide.element));
   state.slides = slides;
+
+  requestAnimationFrame(() => {
+    slides.forEach(slide => captureBaseSize(slide.surface));
+  });
 
   let targetIndex = definitions.findIndex(def => def.includes(state.activePageIndex));
   if (targetIndex === -1) {
     targetIndex = 0;
   }
-
-  requestAnimationFrame(() => {
-    slides.forEach(slide => captureBaseSize(slide.surface));
-    applySlideChange(targetIndex, { preserveZoom: false, immediate: true });
-  });
-}
-
-function getStageWidth() {
-  const track = state.dom?.pageTrack;
-  if (track) {
-    return track.clientWidth;
-  }
-  const stage = document.querySelector('.page-stage');
-  return stage ? stage.clientWidth : 0;
-}
-
-function positionSlides(activeIndex, { immediate = false } = {}) {
-  const slides = state.slides || [];
-  const track = state.dom?.pageTrack;
-  const slider = state.dom?.pageSlider;
-  const dragging = Boolean(track && track.classList.contains('is-dragging'));
-
-  slides.forEach((slide, slideIndex) => {
-    if (!slide?.element) {
-      return;
-    }
-    slide.element.classList.toggle('is-active', slideIndex === activeIndex);
-    slide.element.classList.toggle('is-before', slideIndex < activeIndex);
-    slide.element.classList.toggle('is-after', slideIndex > activeIndex);
-    if (!dragging) {
-      slide.element.classList.remove('is-peek');
-    }
-  });
-
-  swipeState.progress = 0;
-
-  if (!slider) {
-    return;
-  }
-
-  if (immediate) {
-    slider.style.transition = 'none';
-  } else if (!dragging) {
-    slider.style.transition = '';
-  }
-
-  slider.style.transform = `translate3d(${-activeIndex * 100}%, 0, 0)`;
-
-  if (immediate) {
-    requestAnimationFrame(() => {
-      slider.style.transition = '';
-    });
-  }
-}
-
-function setSlidesInteractive(enabled) {
-  const slider = state.dom?.pageSlider;
-  if (slider) {
-    slider.style.transition = enabled ? 'none' : '';
-  }
-
-  if (!enabled) {
-    const slides = state.slides || [];
-    slides.forEach(slide => {
-      if (!slide?.element) {
-        return;
-      }
-      slide.element.classList.remove('is-peek');
-    });
-  }
-
-  const track = state.dom?.pageTrack;
-  if (track) {
-    track.classList.toggle('is-dragging', enabled);
-  }
-}
-
-function updateSlideProgress(progress) {
-  const slides = state.slides || [];
-  const slider = state.dom?.pageSlider;
-  const normalized = Number.isFinite(progress) ? progress : 0;
-  const clamped = clamp(normalized, -1, 1);
-  swipeState.progress = clamped;
-
-  if (slider) {
-    const offset = -(state.currentSlide + clamped) * 100;
-    slider.style.transform = `translate3d(${offset}%, 0, 0)`;
-  }
-
-  slides.forEach((slide, slideIndex) => {
-    if (!slide?.element) {
-      return;
-    }
-    const isPeek = (clamped > 0 && slideIndex === state.currentSlide + 1)
-      || (clamped < 0 && slideIndex === state.currentSlide - 1);
-    slide.element.classList.toggle('is-peek', isPeek);
-  });
-}
-
-function resetSlideProgress() {
-  if (swipeState.progress === 0) {
-    return;
-  }
-  updateSlideProgress(0);
-}
-
-function updateSlideLayout() {
-  positionSlides(state.currentSlide, { immediate: true });
+  updateActiveSlide(targetIndex, { preserveZoom: false });
+  highlightAllPages();
 }
 
 function buildSlideDefinitions({ orientation, isCompact }) {
@@ -4009,62 +3774,44 @@ function handleRectClick(event) {
   if (url) {
     state.currentArticleId = null;
     updateReadingNavigation();
-    loadArticleContent({ url });
+    loadArticleContent(url);
   }
 }
 
-function gotoSlide(index, options = {}) {
+function gotoSlide(index) {
   if (index < 0 || index >= state.slides.length) {
     return;
   }
-  updateActiveSlide(index, options);
+  updateActiveSlide(index);
 }
 
 function updateActiveSlide(index, options = {}) {
-  if (index < 0 || index >= state.slides.length) {
-    return;
-  }
-  applySlideChange(index, options);
-}
-
-function applySlideChange(index, options = {}) {
   const {
     preserveZoom = false,
     keepReadingOpen = false,
-    activePageIndex = null,
-    immediate = false
+    activePageIndex = null
   } = options;
+  if (state.currentSlide != null && state.slides[state.currentSlide]) {
+    state.slides[state.currentSlide].element.classList.remove('is-active');
+  }
 
-  const slides = state.slides || [];
-  if (!slides.length || !slides[index]) {
+  state.currentSlide = index;
+  const current = state.slides[index];
+  if (!current) {
     return;
   }
-  const previousSlide = slides[state.currentSlide] || null;
-  positionSlides(index, { immediate });
-  state.currentSlide = index;
-  const current = slides[index];
+  current.element.classList.add('is-active');
   deactivateAllAdHotspots();
-
   const nextActivePageIndex = Number.isInteger(activePageIndex)
     ? activePageIndex
-    : (Array.isArray(current.pages) && current.pages.length ? current.pages[0] : 0);
+    : current.pages[0];
   state.activePageIndex = nextActivePageIndex;
-
   if (!keepReadingOpen) {
     closeReadingWindow();
   }
 
   if (!preserveZoom) {
-    const extras = [];
-    if (previousSlide?.surface && previousSlide.surface !== current.surface) {
-      extras.push(previousSlide.surface);
-    }
-    resetZoom({
-      targetSurface: current.surface || null,
-      additionalSurfaces: extras
-    });
-  } else if (current.surface) {
-    applyZoom(current.surface);
+    resetZoom();
   }
 
   highlightAllPages();
@@ -4106,8 +3853,7 @@ function updateNavButtons() {
 function updatePageIndicator() {
   const indicator = state.dom?.pageIndicator;
   const zoomIndicator = state.dom?.zoomPageIndicator;
-  const zoomLabel = state.dom?.zoomPageLabel;
-  if (!indicator && !zoomIndicator && !zoomLabel) {
+  if (!indicator && !zoomIndicator) {
     return;
   }
 
@@ -4122,11 +3868,6 @@ function updatePageIndicator() {
       zoomIndicator.hidden = true;
       zoomIndicator.setAttribute('aria-hidden', 'true');
     }
-    if (zoomLabel) {
-      zoomLabel.textContent = '';
-      zoomLabel.hidden = true;
-      zoomLabel.setAttribute('aria-hidden', 'true');
-    }
   };
 
   const totalPages = Array.isArray(state.imagePaths) ? state.imagePaths.length : 0;
@@ -4137,10 +3878,6 @@ function updatePageIndicator() {
   }
 
   const isZoomed = state.zoom.scale > 1;
-  const persistentZoom = shouldKeepZoomMenuVisible();
-  const showZoomIndicator = isZoomed;
-  const showZoomLabel = persistentZoom && !isZoomed;
-  const hideMainIndicator = isZoomed || persistentZoom;
   const pages = [...current.pages].sort((a, b) => a - b);
   const firstPage = pages[0] + 1;
   const lastPage = pages[pages.length - 1] + 1;
@@ -4166,20 +3903,14 @@ function updatePageIndicator() {
 
   if (indicator) {
     indicator.textContent = text;
-    indicator.hidden = hideMainIndicator;
-    indicator.setAttribute('aria-hidden', hideMainIndicator ? 'true' : 'false');
-  }
-
-  if (zoomLabel) {
-    zoomLabel.textContent = text;
-    zoomLabel.hidden = !showZoomLabel;
-    zoomLabel.setAttribute('aria-hidden', showZoomLabel ? 'false' : 'true');
+    indicator.hidden = isZoomed;
+    indicator.setAttribute('aria-hidden', isZoomed ? 'true' : 'false');
   }
 
   if (zoomIndicator) {
     zoomIndicator.textContent = shortText;
-    zoomIndicator.hidden = !showZoomIndicator;
-    zoomIndicator.setAttribute('aria-hidden', showZoomIndicator ? 'false' : 'true');
+    zoomIndicator.hidden = !isZoomed;
+    zoomIndicator.setAttribute('aria-hidden', isZoomed ? 'false' : 'true');
   }
 }
 
@@ -4188,21 +3919,12 @@ function getActiveSurface() {
   return current ? current.surface : null;
 }
 
-function resetZoom(options = {}) {
-  const { targetSurface = null, additionalSurfaces = [] } = options;
+function resetZoom() {
   state.zoom.scale = 1;
   state.zoom.translateX = 0;
   state.zoom.translateY = 0;
-  const surface = targetSurface instanceof Element ? targetSurface : getActiveSurface();
+  const surface = getActiveSurface();
   applyZoom(surface || null);
-  if (Array.isArray(additionalSurfaces)) {
-    additionalSurfaces.forEach(extra => {
-      if (extra instanceof Element) {
-        extra.style.transform = 'translate(0px, 0px) scale(1)';
-        extra.classList.remove('is-zoomed');
-      }
-    });
-  }
   registerUserActivity();
 }
 
@@ -4262,15 +3984,11 @@ function applyZoom(surface) {
       target.classList.toggle('is-zoomed', isZoomed);
     }
     document.body.classList.toggle('is-zoomed', isZoomed);
-    const persistent = shouldKeepZoomMenuVisible();
-    const zoomMenu = state.dom?.zoomMenu || document.querySelector('.zoom-menu');
+    const zoomMenu = document.querySelector('.zoom-menu');
     if (zoomMenu) {
-      const shouldShow = isZoomed || persistent;
-      zoomMenu.classList.toggle('is-visible', shouldShow);
-      zoomMenu.classList.toggle('is-persistent', persistent);
-      zoomMenu.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+      zoomMenu.classList.toggle('is-visible', isZoomed);
+      zoomMenu.setAttribute('aria-hidden', isZoomed ? 'false' : 'true');
     }
-    positionZoomMenu();
     updateMobileMenuButtonVisibility();
     updateZoomUI();
     updateNavButtons();
@@ -4279,9 +3997,9 @@ function applyZoom(surface) {
 }
 
 function updateZoomUI() {
-  const { zoomIn, zoomOut, zoomReset, zoomPageLabel, zoomPageIndicator } = state.dom || {};
-  const isZoomed = state.zoom.scale > 1;
-  const persistent = shouldKeepZoomMenuVisible();
+  const zoomIn = document.querySelector('.zoom-in');
+  const zoomOut = document.querySelector('.zoom-out');
+  const zoomReset = document.querySelector('.zoom-reset');
 
   if (zoomIn) {
     zoomIn.disabled = state.zoom.scale >= maxScale;
@@ -4290,36 +4008,8 @@ function updateZoomUI() {
     zoomOut.disabled = state.zoom.scale <= minScale;
   }
   if (zoomReset) {
-    const showReset = isZoomed;
-    zoomReset.hidden = !showReset;
-    zoomReset.setAttribute('aria-hidden', showReset ? 'false' : 'true');
     zoomReset.disabled = state.zoom.scale === 1;
   }
-  if (zoomPageLabel) {
-    const showLabel = persistent && !isZoomed;
-    zoomPageLabel.hidden = !showLabel;
-    zoomPageLabel.setAttribute('aria-hidden', showLabel ? 'false' : 'true');
-  }
-  if (zoomPageIndicator) {
-    const showIndicator = isZoomed;
-    zoomPageIndicator.hidden = !showIndicator;
-    zoomPageIndicator.setAttribute('aria-hidden', showIndicator ? 'false' : 'true');
-  }
-}
-
-function positionZoomMenu() {
-  const zoomMenu = state.dom?.zoomMenu || document.querySelector('.zoom-menu');
-  const stage = state.dom?.stage || document.querySelector('.page-stage');
-  if (!(zoomMenu instanceof HTMLElement) || !(stage instanceof HTMLElement)) {
-    return;
-  }
-  const rect = stage.getBoundingClientRect();
-  if (!Number.isFinite(rect.width) || rect.width <= 0) {
-    zoomMenu.style.left = '';
-    return;
-  }
-  const center = rect.left + rect.width / 2;
-  zoomMenu.style.left = `${center}px`;
 }
 
 function constrainTranslation(surface, translateX, translateY, scale) {
@@ -4373,38 +4063,13 @@ function handleDoubleClick(event) {
   }
 }
 
-function beginSwipeTracking(event, options = {}) {
-  const { mode = 'free', initialProgress = 0 } = options;
+function beginSwipeTracking(event) {
   swipeState.pointerId = event.pointerId;
   swipeState.startX = event.clientX;
   swipeState.startY = event.clientY;
   swipeState.startTime = event.timeStamp || performance.now();
   swipeState.isTracking = true;
   swipeState.isSwipe = false;
-  swipeState.mode = mode;
-  swipeState.active = mode === 'zoom-overflow' && getStageWidth() > 0;
-  swipeState.progress = clamp(initialProgress, -1, 1);
-  if (swipeState.active) {
-    setSlidesInteractive(true);
-    updateSlideProgress(swipeState.progress);
-  } else {
-    swipeState.progress = 0;
-  }
-}
-
-function resetSwipeTracking(options = {}) {
-  const { preserveSwipe = false } = options;
-  swipeState.pointerId = null;
-  swipeState.startX = 0;
-  swipeState.startY = 0;
-  swipeState.startTime = 0;
-  swipeState.isTracking = false;
-  swipeState.active = false;
-  swipeState.mode = 'free';
-  swipeState.progress = 0;
-  if (!preserveSwipe) {
-    swipeState.isSwipe = false;
-  }
 }
 
 function updatePointerTracker(event) {
@@ -4496,54 +4161,31 @@ function endPinchGesture() {
   panState.surface = surface || null;
 }
 
-function isInteractiveSurfaceTarget(event) {
-  const target = event.target;
-  if (!(target instanceof Element)) {
-    return false;
-  }
-  return Boolean(target.closest('.maprect, .ad-hotspot, .ad-action, .ad-details__link'));
-}
-
 function startPan(event) {
   const surface = event.currentTarget;
   if (!(surface instanceof Element)) {
     return;
   }
-
-  if (isInteractiveSurfaceTarget(event)) {
-    return;
-  }
   updatePointerTracker(event);
   const isTouch = event.pointerType === 'touch';
 
-  if (surface.setPointerCapture) {
-    try {
-      surface.setPointerCapture(event.pointerId);
-    } catch (error) {
-      // Pointer capture may fail if the element is gone; ignore silently.
-    }
-  }
-
   if (isTouch && pointerTracker.size >= 2) {
+    surface.setPointerCapture(event.pointerId);
     beginPinch(surface);
     return;
   }
   if (pinchState.active) {
+    surface.setPointerCapture(event.pointerId);
     return;
   }
   if (state.zoom.scale === 1) {
-    beginSwipeTracking(event, { mode: 'free' });
-    panState.active = false;
-    panState.pointerId = null;
-    panState.surface = surface;
+    beginSwipeTracking(event);
     return;
   }
+  surface.setPointerCapture(event.pointerId);
   swipeState.isTracking = false;
   swipeState.pointerId = null;
   swipeState.isSwipe = false;
-  swipeState.mode = 'free';
-  swipeState.active = false;
-  swipeState.progress = 0;
   event.preventDefault();
   panState.active = true;
   panState.pointerId = event.pointerId;
@@ -4565,7 +4207,7 @@ function handleStagePointerDown(event) {
   if (target.closest('.ad-actions, .nav-button, .zoom-menu')) {
     return;
   }
-  beginSwipeTracking(event, { mode: 'free' });
+  beginSwipeTracking(event);
 }
 
 function movePan(event) {
@@ -4580,83 +4222,28 @@ function movePan(event) {
     }
     endPinchGesture();
   }
-
-  const isSwipePointer = swipeState.isTracking && event.pointerId === swipeState.pointerId;
-  const stageWidth = getStageWidth();
-  const surface = panState.surface instanceof Element
-    ? panState.surface
-    : (event.currentTarget instanceof Element ? event.currentTarget : null);
-
-  if (isSwipePointer && swipeState.mode === 'free') {
+  if (swipeState.isTracking && event.pointerId === swipeState.pointerId) {
     const dx = event.clientX - swipeState.startX;
     const dy = event.clientY - swipeState.startY;
-    if (!swipeState.active) {
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10 && stageWidth > 0) {
-        swipeState.active = true;
-        setSlidesInteractive(true);
-        updateSlideProgress(-dx / stageWidth);
-        event.preventDefault();
-      } else if (Math.abs(dy) > 10) {
-        resetSwipeTracking();
-      }
-    } else if (stageWidth > 0) {
-      event.preventDefault();
-      updateSlideProgress(-dx / stageWidth);
-    }
-    if (!swipeState.active && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
       event.preventDefault();
     }
     return;
   }
-
-  const isPanPointer = panState.active && event.pointerId === panState.pointerId && surface instanceof Element;
-
-  if (!isPanPointer) {
-    if (isSwipePointer && swipeState.mode === 'zoom-overflow' && surface instanceof Element && stageWidth > 0) {
-      const dx = event.clientX - panState.startX;
-      const dy = event.clientY - panState.startY;
-      const desiredX = panState.baseX + dx;
-      const desiredY = panState.baseY + dy;
-      const constrained = constrainTranslation(surface, desiredX, desiredY, state.zoom.scale);
-      const overflowX = desiredX - constrained.x;
-      updateSlideProgress(-overflowX / stageWidth);
-      event.preventDefault();
-    }
+  if (!panState.active || event.pointerId !== panState.pointerId) {
     return;
   }
-
   event.preventDefault();
+  const surface = panState.surface || event.currentTarget;
+  if (!(surface instanceof Element)) {
+    return;
+  }
   const dx = event.clientX - panState.startX;
   const dy = event.clientY - panState.startY;
-  const desiredX = panState.baseX + dx;
-  const desiredY = panState.baseY + dy;
-  const constrained = constrainTranslation(surface, desiredX, desiredY, state.zoom.scale);
+  const constrained = constrainTranslation(surface, panState.baseX + dx, panState.baseY + dy, state.zoom.scale);
   state.zoom.translateX = constrained.x;
   state.zoom.translateY = constrained.y;
   applyZoom(surface);
-
-  if (state.zoom.scale <= 1 || !(stageWidth > 0)) {
-    return;
-  }
-
-  const overflowX = desiredX - constrained.x;
-  const canGoNext = state.currentSlide < state.slides.length - 1;
-  const canGoPrev = state.currentSlide > 0;
-  const progress = -overflowX / stageWidth;
-
-  if (swipeState.mode === 'zoom-overflow' && isSwipePointer) {
-    updateSlideProgress(progress);
-    return;
-  }
-
-  if (Math.abs(overflowX) > 12 && ((overflowX < 0 && canGoNext) || (overflowX > 0 && canGoPrev))) {
-    beginSwipeTracking(event, { mode: 'zoom-overflow', initialProgress: progress });
-    swipeState.active = true;
-    setSlidesInteractive(true);
-    updateSlideProgress(progress);
-  } else if (swipeState.mode === 'zoom-overflow') {
-    updateSlideProgress(progress);
-  }
 }
 
 function endPan(event) {
@@ -4666,96 +4253,33 @@ function endPan(event) {
   if (pinchState.active && pointerTracker.size < 2) {
     endPinchGesture();
   }
-
-  const surface = panState.surface instanceof Element ? panState.surface : null;
-  const isSwipePointer = swipeState.isTracking && event.pointerId === swipeState.pointerId;
-
-  if (isSwipePointer) {
+  if (swipeState.isTracking && event.pointerId === swipeState.pointerId) {
     const isCancel = event.type === 'pointercancel';
-    let slideChanged = false;
-
-    if (swipeState.active && !isCancel) {
+    if (!isCancel) {
+      const dx = event.clientX - swipeState.startX;
+      const dy = event.clientY - swipeState.startY;
       const elapsed = (event.timeStamp || performance.now()) - swipeState.startTime;
-      let progress = swipeState.progress;
-
-      if (swipeState.mode === 'free') {
-        const dx = event.clientX - swipeState.startX;
-        const dy = event.clientY - swipeState.startY;
-        const stageWidth = getStageWidth();
-        const horizontalDominant = Math.abs(dx) > Math.abs(dy);
-        if (stageWidth > 0 && horizontalDominant) {
-          progress = -dx / stageWidth;
-          swipeState.progress = progress;
-        } else if (!horizontalDominant) {
-          progress = 0;
-        }
-        const fastSwipe = Math.abs(dx) > 25 && elapsed < 200;
-        if ((Math.abs(progress) >= 0.3 || fastSwipe) && horizontalDominant) {
-          const direction = progress > 0 ? 1 : -1;
-          const targetIndex = state.currentSlide + direction;
-          if (targetIndex >= 0 && targetIndex < state.slides.length) {
-            setSlidesInteractive(false);
-            gotoSlide(targetIndex);
-            swipeState.isSwipe = true;
-            slideChanged = true;
-          }
-        }
-      } else if (swipeState.mode === 'zoom-overflow') {
-        const stageWidth = getStageWidth();
-        if (surface && stageWidth > 0) {
-          const dx = event.clientX - panState.startX;
-          const dy = event.clientY - panState.startY;
-          const desiredX = panState.baseX + dx;
-          const desiredY = panState.baseY + dy;
-          const constrained = constrainTranslation(surface, desiredX, desiredY, state.zoom.scale);
-          const overflowX = desiredX - constrained.x;
-          progress = -overflowX / stageWidth;
-          swipeState.progress = progress;
-        }
-        if (Math.abs(progress) >= 0.3) {
-          const direction = progress > 0 ? 1 : -1;
-          const targetIndex = state.currentSlide + direction;
-          if (targetIndex >= 0 && targetIndex < state.slides.length) {
-            setSlidesInteractive(false);
-            gotoSlide(targetIndex);
-            swipeState.isSwipe = true;
-            slideChanged = true;
-          }
-        }
+      const horizontalDominant = Math.abs(dx) > Math.abs(dy);
+      if (horizontalDominant && Math.abs(dx) > 60 && elapsed < 600) {
+        const direction = dx < 0 ? 1 : -1;
+        gotoSlide(state.currentSlide + direction);
+        swipeState.isSwipe = true;
+      } else {
+        swipeState.isSwipe = false;
       }
-    }
-
-    if (!slideChanged) {
+    } else {
       swipeState.isSwipe = false;
-      setSlidesInteractive(false);
-      positionSlides(state.currentSlide);
     }
-
-    if (surface && surface.hasPointerCapture?.(event.pointerId)) {
-      try {
-        surface.releasePointerCapture(event.pointerId);
-      } catch (error) {
-        // Ignore release errors
-      }
-    }
-
-    resetSwipeTracking({ preserveSwipe: slideChanged });
-    panState.active = false;
-    panState.pointerId = null;
-    panState.surface = null;
+    swipeState.isTracking = false;
+    swipeState.pointerId = null;
     return;
   }
-
   if (!panState.active || event.pointerId !== panState.pointerId) {
     return;
   }
-
-  if (surface && surface.hasPointerCapture?.(event.pointerId)) {
-    try {
-      surface.releasePointerCapture(event.pointerId);
-    } catch (error) {
-      // ignore
-    }
+  const surface = panState.surface || event.currentTarget;
+  if (surface instanceof Element && surface.hasPointerCapture?.(event.pointerId)) {
+    surface.releasePointerCapture(event.pointerId);
   }
   panState.active = false;
   panState.pointerId = null;
@@ -5376,194 +4900,19 @@ function resolveArticleUrl(url) {
   }
 }
 
-const ARTICLE_STYLE_MAP = {
-  Otsikko: { tag: 'h2', className: 'reading-article__title' },
-  Ingressi: { tag: 'p', className: 'reading-article__lead' },
-  Teksti: { tag: 'p', className: 'reading-article__paragraph' },
-  Valiotsikko: { tag: 'h3', className: 'reading-article__subtitle' },
-  Kirjoittaja: { tag: 'p', className: 'reading-article__byline' },
-  Fakta: { tag: 'aside', className: 'reading-article__fact' },
-  Nosto: { tag: 'aside', className: 'reading-article__pullquote' },
-  NostoOtsikko: { tag: 'h4', className: 'reading-article__highlight-title' },
-  Sitaatti: { tag: 'blockquote', className: 'reading-article__quote' },
-  default: { tag: 'p', className: 'reading-article__paragraph' }
-};
-
-function getStoredArticleEntry(articleId) {
-  if (!articleId) {
-    return null;
-  }
-  return state.articleContent?.get(String(articleId)) || null;
-}
-
-function createArticleNodeForStyle(style) {
-  const descriptor = ARTICLE_STYLE_MAP[style] || ARTICLE_STYLE_MAP.default;
-  const element = document.createElement(descriptor.tag);
-  if (descriptor.className) {
-    element.className = descriptor.className;
-  }
-  return element;
-}
-
-function createArticleSegmentNode(segment) {
-  if (!segment || typeof segment.i !== 'string') {
-    return null;
-  }
-  const text = segment.i.replace(/\u0000/g, '');
-  if (!text) {
-    return null;
-  }
-  const charStyle = segment.attributes?.agcharstyle;
-  if (charStyle === 'Lihavointi') {
-    const strong = document.createElement('strong');
-    strong.textContent = text;
-    return strong;
-  }
-  if (charStyle === 'Kursivointi') {
-    const emphasis = document.createElement('em');
-    emphasis.textContent = text;
-    return emphasis;
-  }
-  return document.createTextNode(text);
-}
-
-function createArticleContentElement(entry) {
-  if (!entry || !Array.isArray(entry.ops)) {
-    return null;
-  }
-  const container = document.createElement('article');
-  container.className = 'reading-article';
-
-  entry.ops.forEach(op => {
-    if (!op) {
-      return;
-    }
-    const element = createArticleNodeForStyle(op.agparstyle);
-    const segments = Array.isArray(op.t) ? op.t : [];
-    segments.forEach(segment => {
-      const node = createArticleSegmentNode(segment);
-      if (node) {
-        element.appendChild(node);
-      }
-    });
-    if (!element.textContent.trim()) {
-      return;
-    }
-    container.appendChild(element);
-  });
-
-  return container.childNodes.length ? container : null;
-}
-
-function renderStoredArticleContent(articleId) {
-  const entry = getStoredArticleEntry(articleId);
-  if (!entry) {
-    return false;
-  }
-  const contentElement = createArticleContentElement(entry);
-  if (!contentElement) {
-    return false;
-  }
-  const content = state.dom.readingContent || document.querySelector('#article-content');
-  if (!content) {
-    return false;
-  }
-  content.innerHTML = '';
-  content.appendChild(contentElement);
-  return true;
-}
-
-function updateReadingHeading(text, visible = false) {
-  const heading = state.dom.readingTitle;
-  if (!heading) {
-    return;
-  }
-  const show = visible && typeof text === 'string' && text.trim().length > 0;
-  heading.textContent = show ? text : '';
-  heading.hidden = !show;
-  heading.setAttribute('aria-hidden', show ? 'false' : 'true');
-}
-
-async function ensureArticleContentLoaded() {
-  if (state.articleContent instanceof Map && state.articleContent.size > 0) {
-    return true;
-  }
-  if (state.articleContentPromise) {
-    try {
-      await state.articleContentPromise;
-    } catch (error) {
-      console.warn('Artikkelien sisällön esilataus epäonnistui.', error);
-    }
-    return state.articleContent instanceof Map && state.articleContent.size > 0;
-  }
-
-  const issuePath = state.currentIssuePath;
-  const basePath = getPaperStaticBasePath();
-  if (!issuePath || !basePath) {
-    return false;
-  }
-
-  const articlesUrl = `${basePath}/${issuePath}articles.json`;
-
-  const loadPromise = (async () => {
-    try {
-      const response = await fetch(articlesUrl);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const parsed = await response.json();
-      if (Array.isArray(parsed)) {
-        storeArticleContent(parsed);
-      }
-    } catch (error) {
-      console.warn('Artikkelien sisällön lataaminen epäonnistui.', error);
-    }
-  })();
-
-  state.articleContentPromise = loadPromise;
-  try {
-    await loadPromise;
-  } finally {
-    state.articleContentPromise = null;
-  }
-
-  return state.articleContent instanceof Map && state.articleContent.size > 0;
-}
-
-async function loadArticleContent(articleOrUrl) {
+async function loadArticleContent(url) {
   const readingWindow = state.dom.readingWindow || document.querySelector('.reading-window');
   const content = state.dom.readingContent || document.querySelector('#article-content');
   if (!readingWindow || !content) {
     return;
   }
 
-  const article = typeof articleOrUrl === 'string'
-    ? { url: articleOrUrl }
-    : (articleOrUrl && typeof articleOrUrl === 'object' ? articleOrUrl : {});
-  const articleId = article && article.id != null ? String(article.id) : null;
   openReadingWindow();
   readingWindow.scrollTop = 0;
-  const headingText = typeof article.hl === 'string' ? article.hl.trim() : '';
-  updateReadingHeading(headingText, headingText.length > 0);
   content.innerHTML = `<p>${resolveLabel('articleLoading', 'Ladataan sisältöä…')}</p>`;
 
-  if (articleId) {
-    if (renderStoredArticleContent(articleId)) {
-      return;
-    }
-    const hasLoaded = await ensureArticleContentLoaded();
-    if (hasLoaded && renderStoredArticleContent(articleId)) {
-      return;
-    }
-  }
-
-  if (!article.url) {
-    content.innerHTML = `<p>${resolveLabel('articleError', 'Artikkelin lataaminen epäonnistui.')}</p>`;
-    return;
-  }
-
   try {
-    const articleUrl = resolveArticleUrl(article.url);
+    const articleUrl = resolveArticleUrl(url);
     const response = await fetch(articleUrl);
     if (!response.ok) {
       throw new Error(`Artikkelin lataus epäonnistui: ${response.status}`);
@@ -5594,12 +4943,6 @@ async function loadArticleContent(articleOrUrl) {
     });
   } catch (error) {
     console.error('Artikkelin lataaminen epäonnistui:', error);
-    if (articleId) {
-      const hasLoaded = await ensureArticleContentLoaded();
-      if (hasLoaded && renderStoredArticleContent(articleId)) {
-        return;
-      }
-    }
     content.innerHTML = `<p>${resolveLabel('articleError', 'Artikkelin lataaminen epäonnistui.')}</p>`;
   }
 }

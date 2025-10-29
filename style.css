@@ -537,6 +537,9 @@ body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot .ad-actions {
 .maprect:focus-visible {
   fill: rgba(142, 190, 199, 0.3);
 }
+.maprect:focus {
+   outline: none;
+}
 
 body.is-zoomed .maprect {
   pointer-events: none;
@@ -562,7 +565,7 @@ body.is-zoomed .maprect {
 
 .page-indicator {
   position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(1.25rem, 4vh, 2.75rem));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(1.25rem, 4vh, 2.2rem));
   left: 50%;
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.9);
@@ -582,8 +585,8 @@ body.is-zoomed .maprect {
 }
 
 body.ui-controls-hidden .page-indicator {
-  opacity: 0;
-  transform: translate(-50%, 0.75rem);
+  /* opacity: 0; */
+  /* transform: translate(-50%, 0.75rem); */
 }
 
 body.is-zoomed .page-indicator {
@@ -887,11 +890,11 @@ body.theme-dark .print-panel__close:focus-visible {
   flex-direction: column;
   align-items: center;
   gap: 0.65rem;
-  border: 1px solid transparent;
+  border: 3px solid transparent;
   border-radius: 0.9rem;
   padding: 0.75rem;
   background: rgba(255, 255, 255, 0.75);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.18);
   cursor: pointer;
   transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition), background var(--transition);
 }
@@ -899,13 +902,11 @@ body.theme-dark .print-panel__close:focus-visible {
 .print-page:hover,
 .print-page:focus-visible {
   transform: translateY(-3px);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.22);
 }
 
 .print-page.is-selected {
   border-color: rgba(0, 87, 184, 0.45);
-  background: rgba(0, 87, 184, 0.08);
-  box-shadow: 0 12px 28px rgba(0, 87, 184, 0.22);
+  background: rgba(0, 87, 184, 0.04);
 }
 
 body.theme-dark .print-page {
@@ -953,6 +954,9 @@ body.theme-dark .print-page.is-selected {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
 }
 
 .print-page.is-selected .print-page__badge {
@@ -992,7 +996,7 @@ body.theme-dark .print-page.is-selected .print-page__badge {
   background: var(--accent);
   color: #fff;
   cursor: pointer;
-  box-shadow: 0 20px 40px rgba(0, 87, 184, 0.25);
+  box-shadow: 0 3px 13px rgba(0, 87, 184, 0.25);
   transition: transform var(--transition), box-shadow var(--transition), background var(--transition);
 }
 

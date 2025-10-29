@@ -33,6 +33,7 @@ const state = {
   articleLookup: new Map(),
   articlePageLookup: new Map(),
   articleContent: new Map(),
+  articleContentPromise: null,
   adLookup: new Map(),
   adPageLookup: new Map(),
   archiveItems: [],
@@ -1618,6 +1619,23 @@ async function init() {
   }
 }
 
+function storeArticleContent(entries) {
+  state.articleContent = new Map();
+  if (!Array.isArray(entries)) {
+    return;
+  }
+  entries.forEach(entry => {
+    if (!entry || entry.id == null || !Array.isArray(entry.ops)) {
+      return;
+    }
+    const key = String(entry.id);
+    if (!key) {
+      return;
+    }
+    state.articleContent.set(key, entry);
+  });
+}
+
 function applyIssue(issue, options = {}) {
   if (!issue) {
     return;
@@ -1647,16 +1665,8 @@ function applyIssue(issue, options = {}) {
   state.articleOrder = state.pageArticles
     .map(article => String(article.id))
     .filter(id => Boolean(id));
-  state.articleContent = new Map();
-  if (Array.isArray(issue.articleContent)) {
-    issue.articleContent.forEach(entry => {
-      if (!entry || entry.id == null) {
-        return;
-      }
-      const key = String(entry.id);
-      state.articleContent.set(key, entry);
-    });
-  }
+  storeArticleContent(issue.articleContent);
+  state.articleContentPromise = null;
   prepareAudioForIssue();
   state.currentArticleId = null;
   state.currentAdId = null;
@@ -2443,12 +2453,6 @@ function openArticleById(articleId) {
   state.dom.readingWindow?.classList.remove('reading-window--ad');
   deactivateAllAdHotspots();
   focusPageForArticle(id, { keepReadingOpen: true });
-  const heading = state.dom.readingTitle;
-  if (heading) {
-    heading.textContent = '';
-    heading.hidden = true;
-    heading.setAttribute('aria-hidden', 'true');
-  }
   state.currentArticleId = id;
   updateReadingNavigation();
   loadArticleContent(article);
@@ -5468,6 +5472,52 @@ function updateReadingHeading(text, visible = false) {
   heading.setAttribute('aria-hidden', show ? 'false' : 'true');
 }
 
+async function ensureArticleContentLoaded() {
+  if (state.articleContent instanceof Map && state.articleContent.size > 0) {
+    return true;
+  }
+  if (state.articleContentPromise) {
+    try {
+      await state.articleContentPromise;
+    } catch (error) {
+      console.warn('Artikkelien sisällön esilataus epäonnistui.', error);
+    }
+    return state.articleContent instanceof Map && state.articleContent.size > 0;
+  }
+
+  const issuePath = state.currentIssuePath;
+  const basePath = getPaperStaticBasePath();
+  if (!issuePath || !basePath) {
+    return false;
+  }
+
+  const articlesUrl = `${basePath}/${issuePath}articles.json`;
+
+  const loadPromise = (async () => {
+    try {
+      const response = await fetch(articlesUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const parsed = await response.json();
+      if (Array.isArray(parsed)) {
+        storeArticleContent(parsed);
+      }
+    } catch (error) {
+      console.warn('Artikkelien sisällön lataaminen epäonnistui.', error);
+    }
+  })();
+
+  state.articleContentPromise = loadPromise;
+  try {
+    await loadPromise;
+  } finally {
+    state.articleContentPromise = null;
+  }
+
+  return state.articleContent instanceof Map && state.articleContent.size > 0;
+}
+
 async function loadArticleContent(articleOrUrl) {
   const readingWindow = state.dom.readingWindow || document.querySelector('.reading-window');
   const content = state.dom.readingContent || document.querySelector('#article-content');
@@ -5481,11 +5531,18 @@ async function loadArticleContent(articleOrUrl) {
   const articleId = article && article.id != null ? String(article.id) : null;
   openReadingWindow();
   readingWindow.scrollTop = 0;
-  updateReadingHeading('', false);
+  const headingText = typeof article.hl === 'string' ? article.hl.trim() : '';
+  updateReadingHeading(headingText, headingText.length > 0);
   content.innerHTML = `<p>${resolveLabel('articleLoading', 'Ladataan sisältöä…')}</p>`;
 
-  if (renderStoredArticleContent(articleId)) {
-    return;
+  if (articleId) {
+    if (renderStoredArticleContent(articleId)) {
+      return;
+    }
+    const hasLoaded = await ensureArticleContentLoaded();
+    if (hasLoaded && renderStoredArticleContent(articleId)) {
+      return;
+    }
   }
 
   if (!article.url) {
@@ -5525,8 +5582,11 @@ async function loadArticleContent(articleOrUrl) {
     });
   } catch (error) {
     console.error('Artikkelin lataaminen epäonnistui:', error);
-    if (renderStoredArticleContent(articleId)) {
-      return;
+    if (articleId) {
+      const hasLoaded = await ensureArticleContentLoaded();
+      if (hasLoaded && renderStoredArticleContent(articleId)) {
+        return;
+      }
     }
     content.innerHTML = `<p>${resolveLabel('articleError', 'Artikkelin lataaminen epäonnistui.')}</p>`;
   }

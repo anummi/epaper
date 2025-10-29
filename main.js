@@ -84,6 +84,9 @@ const panState = {
 
 const pointerTracker = new Map();
 
+let pendingZoomFrame = null;
+let pendingZoomSurface = null;
+
 const pinchState = {
   active: false,
   surface: null,
@@ -567,12 +570,19 @@ function buildLayout() {
 
   const menuBar = document.createElement('header');
   menuBar.className = 'menu-bar menu-top';
+  menuBar.id = 'main-menu';
   shell.appendChild(menuBar);
 
   const menuContent = document.createElement('div');
   menuContent.className = 'menu-content';
   menuContent.dataset.role = 'menu';
   menuBar.appendChild(menuContent);
+
+  const mobileMenuClose = document.createElement('button');
+  mobileMenuClose.type = 'button';
+  mobileMenuClose.className = 'mobile-menu-close';
+  mobileMenuClose.textContent = '×';
+  menuBar.appendChild(mobileMenuClose);
 
   const stage = document.createElement('main');
   stage.className = 'page-stage';
@@ -611,6 +621,26 @@ function buildLayout() {
   zoomReset.className = 'zoom-button zoom-reset';
   zoomMenu.appendChild(zoomReset);
   shell.appendChild(zoomMenu);
+
+  const mobileMenuBackdrop = document.createElement('div');
+  mobileMenuBackdrop.className = 'mobile-menu-backdrop';
+  mobileMenuBackdrop.setAttribute('aria-hidden', 'true');
+  shell.appendChild(mobileMenuBackdrop);
+
+  const mobileMenuButton = document.createElement('button');
+  mobileMenuButton.type = 'button';
+  mobileMenuButton.className = 'mobile-menu-button';
+  mobileMenuButton.setAttribute('aria-controls', 'main-menu');
+  mobileMenuButton.setAttribute('aria-expanded', 'false');
+  const mobileMenuIcon = document.createElement('span');
+  mobileMenuIcon.className = 'mobile-menu-button__icon';
+  mobileMenuIcon.setAttribute('aria-hidden', 'true');
+  mobileMenuIcon.textContent = '☰';
+  const mobileMenuLabel = document.createElement('span');
+  mobileMenuLabel.className = 'mobile-menu-button__label';
+  mobileMenuButton.appendChild(mobileMenuIcon);
+  mobileMenuButton.appendChild(mobileMenuLabel);
+  shell.appendChild(mobileMenuButton);
 
   const allPages = document.createElement('aside');
   allPages.className = 'all-pages';
@@ -913,6 +943,7 @@ function buildLayout() {
     shell,
     stage,
     menuContent,
+    menuBar,
     navPrev,
     navNext,
     pageTrack,
@@ -966,9 +997,13 @@ function buildLayout() {
     audioResumeOverlay,
     audioResumeMessage,
     audioResumeContinue,
-    audioResumeRestart
+    audioResumeRestart,
+    mobileMenuButton,
+    mobileMenuClose,
+    mobileMenuBackdrop
   };
 
+  refreshMobileMenuAccessibility();
   updateAudioUI();
 }
 
@@ -1001,6 +1036,23 @@ function refreshLocalizedTexts(options = {}) {
     dom.zoomReset.setAttribute('aria-label', resetLabel);
   }
 
+  if (dom.mobileMenuButton) {
+    const openLabel = resolveLabel('openMenu', 'Avaa valikko');
+    dom.mobileMenuButton.setAttribute('aria-label', openLabel);
+    const labelElement = dom.mobileMenuButton.querySelector('.mobile-menu-button__label');
+    if (labelElement) {
+      labelElement.textContent = getNavigationLabelByAction('toggle-menu') || resolveLabel('menuLabel', 'Valikko');
+    }
+  }
+
+  if (dom.mobileMenuClose) {
+    const closeMenuLabel = resolveLabel('closeMenu', 'Sulje valikko');
+    dom.mobileMenuClose.setAttribute('aria-label', closeMenuLabel);
+    dom.mobileMenuClose.title = closeMenuLabel;
+  }
+
+  refreshMobileMenuAccessibility();
+
   if (dom.allPagesTitle) {
     const overviewLabel = getNavigationLabelByAction('toggle-all-pages') || resolveLabel('allPagesTitle', 'Kaikki sivut');
     dom.allPagesTitle.textContent = overviewLabel;
@@ -1013,9 +1065,15 @@ function refreshLocalizedTexts(options = {}) {
   dom.archiveClose?.setAttribute('aria-label', resolveLabel('closeArchive', 'Sulje arkisto'));
 
   if (dom.readingTitle) {
-    dom.readingTitle.textContent = resolveLabel('readingTitle', 'Artikkeli');
-    dom.readingTitle.hidden = false;
-    dom.readingTitle.setAttribute('aria-hidden', 'false');
+    if (state.currentAdId) {
+      dom.readingTitle.textContent = getAdWindowTitle();
+      dom.readingTitle.hidden = false;
+      dom.readingTitle.setAttribute('aria-hidden', 'false');
+    } else {
+      dom.readingTitle.textContent = '';
+      dom.readingTitle.hidden = true;
+      dom.readingTitle.setAttribute('aria-hidden', 'true');
+    }
   }
   dom.readingClose?.setAttribute('aria-label', resolveLabel('closeArticle', 'Sulje artikkeli'));
   updateReadingNavigation();
@@ -1329,6 +1387,7 @@ function bindNavigationHandlers() {
     button.dataset.bound = 'true';
     button.addEventListener('click', () => {
       const action = button.dataset.action;
+      closeMobileMenu();
       handleNavigationAction(action);
     });
   });
@@ -1417,7 +1476,10 @@ function attachGlobalListeners() {
     audioTimeline,
     audioResumeOverlay,
     audioResumeContinue,
-    audioResumeRestart
+    audioResumeRestart,
+    mobileMenuButton,
+    mobileMenuClose,
+    mobileMenuBackdrop
   } = state.dom;
 
   navPrev?.addEventListener('click', () => gotoSlide(state.currentSlide - 1));
@@ -1479,6 +1541,10 @@ function attachGlobalListeners() {
   audioResumeContinue?.addEventListener('click', handleAudioResumeContinue);
   audioResumeRestart?.addEventListener('click', handleAudioResumeRestart);
 
+  mobileMenuButton?.addEventListener('click', toggleMobileMenu);
+  mobileMenuClose?.addEventListener('click', () => closeMobileMenu({ focusTrigger: true }));
+  mobileMenuBackdrop?.addEventListener('click', () => closeMobileMenu({ focusTrigger: true }));
+
   stage?.addEventListener('pointerdown', handleStagePointerDown);
   stage?.addEventListener('pointermove', movePan);
   stage?.addEventListener('pointerup', endPan);
@@ -1494,6 +1560,58 @@ function attachGlobalListeners() {
 
 function toggleMenuCollapsed() {
   document.body.classList.toggle('menu-collapsed');
+}
+
+function refreshMobileMenuAccessibility() {
+  const { menuBar, mobileMenuBackdrop, mobileMenuButton } = state.dom || {};
+  const isSmallViewport = window.innerWidth < 900;
+  const isOpen = document.body.classList.contains('mobile-menu-open');
+  if (menuBar) {
+    menuBar.setAttribute('aria-hidden', isSmallViewport && !isOpen ? 'true' : 'false');
+  }
+  if (mobileMenuBackdrop) {
+    mobileMenuBackdrop.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+  }
+  if (mobileMenuButton) {
+    mobileMenuButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  }
+}
+
+function openMobileMenu() {
+  if (window.innerWidth >= 900) {
+    refreshMobileMenuAccessibility();
+    return;
+  }
+  if (document.body.classList.contains('mobile-menu-open')) {
+    return;
+  }
+  document.body.classList.add('mobile-menu-open');
+  refreshMobileMenuAccessibility();
+  const firstItem = state.dom?.menuContent?.querySelector('.menu-item');
+  if (firstItem instanceof HTMLElement) {
+    firstItem.focus({ preventScroll: true });
+  }
+}
+
+function closeMobileMenu(options = {}) {
+  if (!document.body.classList.contains('mobile-menu-open')) {
+    refreshMobileMenuAccessibility();
+    return;
+  }
+  document.body.classList.remove('mobile-menu-open');
+  refreshMobileMenuAccessibility();
+  const focusTrigger = Boolean(options.focusTrigger);
+  if (focusTrigger && state.dom?.mobileMenuButton instanceof HTMLElement) {
+    state.dom.mobileMenuButton.focus({ preventScroll: true });
+  }
+}
+
+function toggleMobileMenu() {
+  if (document.body.classList.contains('mobile-menu-open')) {
+    closeMobileMenu();
+  } else {
+    openMobileMenu();
+  }
 }
 
 function handleLanguageChange(event) {
@@ -1523,6 +1641,10 @@ function handleKeydown(event) {
     }
     if (document.body.classList.contains('is-zoomed')) {
       resetZoom();
+      return;
+    }
+    if (document.body.classList.contains('mobile-menu-open')) {
+      closeMobileMenu({ focusTrigger: true });
       return;
     }
     if (state.dom.allPages?.classList.contains('is-open')) {
@@ -1768,9 +1890,9 @@ function openArticleById(articleId) {
   focusPageForArticle(id, { keepReadingOpen: true });
   const heading = state.dom.readingTitle;
   if (heading) {
-    heading.textContent = article.hl || resolveLabel('readingTitle', 'Artikkeli');
-    heading.hidden = false;
-    heading.setAttribute('aria-hidden', 'false');
+    heading.textContent = '';
+    heading.hidden = true;
+    heading.setAttribute('aria-hidden', 'true');
   }
   state.currentArticleId = id;
   updateReadingNavigation();
@@ -1784,6 +1906,7 @@ function openArchivePanel() {
   if (!panel) {
     return;
   }
+  closeMobileMenu();
   toggleAllPages(false);
   closeSettingsPanel();
   closeReadingWindow();
@@ -1840,6 +1963,7 @@ function openAdsPanel() {
   if (!adsPanel) {
     return;
   }
+  closeMobileMenu();
   toggleAllPages(false);
   closeArchivePanel();
   closeSettingsPanel();
@@ -1877,6 +2001,7 @@ function openSettingsPanel() {
   if (!panel) {
     return;
   }
+  closeMobileMenu();
   toggleAllPages(false);
   closeArchivePanel();
   closeReadingWindow();
@@ -1900,6 +2025,9 @@ function handleResize() {
   state.resizeTimer = setTimeout(() => {
     const newOrientation = window.innerWidth > window.innerHeight ? 'landscape' : 'portrait';
     const isCompact = window.innerWidth < 900;
+    if (window.innerWidth >= 900 && document.body.classList.contains('mobile-menu-open')) {
+      closeMobileMenu();
+    }
     if (newOrientation !== state.orientation || isCompact !== state.isCompact) {
       renderSlides();
       updateAllPagesSizing();
@@ -1915,6 +2043,7 @@ function handleResize() {
     }
     updateAllPagesSizing();
     refreshAdsPanelLayout();
+    refreshMobileMenuAccessibility();
   }, 180);
 }
 
@@ -3221,18 +3350,7 @@ function resetZoom() {
   state.zoom.translateX = 0;
   state.zoom.translateY = 0;
   const surface = getActiveSurface();
-  if (surface) {
-    surface.classList.remove('is-zoomed');
-    surface.style.transform = 'translate(0px, 0px) scale(1)';
-  }
-  document.body.classList.remove('is-zoomed');
-  const zoomMenu = document.querySelector('.zoom-menu');
-  if (zoomMenu) {
-    zoomMenu.classList.remove('is-visible');
-    zoomMenu.setAttribute('aria-hidden', 'true');
-  }
-  updateZoomUI();
-  updateNavButtons();
+  applyZoom(surface || null);
 }
 
 function adjustZoom(direction) {
@@ -3272,17 +3390,32 @@ function setZoom(scale, focalPoint) {
 }
 
 function applyZoom(surface) {
-  surface.style.transform = `translate(${state.zoom.translateX}px, ${state.zoom.translateY}px) scale(${state.zoom.scale})`;
-  const isZoomed = state.zoom.scale > 1;
-  surface.classList.toggle('is-zoomed', isZoomed);
-  document.body.classList.toggle('is-zoomed', isZoomed);
-  const zoomMenu = document.querySelector('.zoom-menu');
-  if (zoomMenu) {
-    zoomMenu.classList.toggle('is-visible', isZoomed);
-    zoomMenu.setAttribute('aria-hidden', isZoomed ? 'false' : 'true');
+  if (surface instanceof Element) {
+    pendingZoomSurface = surface;
   }
-  updateZoomUI();
-  updateNavButtons();
+  if (pendingZoomFrame !== null) {
+    return;
+  }
+  pendingZoomFrame = requestAnimationFrame(() => {
+    pendingZoomFrame = null;
+    const target = pendingZoomSurface && pendingZoomSurface.isConnected
+      ? pendingZoomSurface
+      : getActiveSurface();
+    pendingZoomSurface = null;
+    const isZoomed = state.zoom.scale > 1;
+    if (target) {
+      target.style.transform = `translate(${state.zoom.translateX}px, ${state.zoom.translateY}px) scale(${state.zoom.scale})`;
+      target.classList.toggle('is-zoomed', isZoomed);
+    }
+    document.body.classList.toggle('is-zoomed', isZoomed);
+    const zoomMenu = document.querySelector('.zoom-menu');
+    if (zoomMenu) {
+      zoomMenu.classList.toggle('is-visible', isZoomed);
+      zoomMenu.setAttribute('aria-hidden', isZoomed ? 'false' : 'true');
+    }
+    updateZoomUI();
+    updateNavButtons();
+  });
 }
 
 function updateZoomUI() {
@@ -3584,6 +3717,7 @@ function toggleAllPages(forceOpen) {
   }
   const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !overlay.classList.contains('is-open');
   if (shouldOpen) {
+    closeMobileMenu();
     resetZoom();
     closeArchivePanel();
     closeSettingsPanel();
@@ -3857,6 +3991,7 @@ function openReadingWindow() {
   if (!readingWindow) {
     return;
   }
+  closeMobileMenu();
   readingWindow.classList.add('is-open');
   readingWindow.setAttribute('aria-hidden', 'false');
   document.body.classList.add('reading-open');
@@ -3885,9 +4020,9 @@ function closeReadingWindow() {
   deactivateAllAdHotspots();
   updateReadingNavigation();
   if (state.dom.readingTitle) {
-    state.dom.readingTitle.textContent = resolveLabel('readingTitle', 'Artikkeli');
-    state.dom.readingTitle.hidden = false;
-    state.dom.readingTitle.setAttribute('aria-hidden', 'false');
+    state.dom.readingTitle.textContent = '';
+    state.dom.readingTitle.hidden = true;
+    state.dom.readingTitle.setAttribute('aria-hidden', 'true');
   }
 }
 

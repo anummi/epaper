@@ -743,6 +743,10 @@ body.is-zoomed .zoom-menu__page-label {
   align-items: center;
 }
 
+body.is-zoomed .zoom-menu.is-persistent .zoom-menu__page-label {
+  display: none;
+}
+
 body.ui-controls-hidden .zoom-menu.is-visible {
   opacity: 0;
   pointer-events: none;

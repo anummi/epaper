@@ -128,8 +128,12 @@ const readingSwipeState = {
   startY: 0,
   startTime: 0,
   active: false,
-  swiped: false
+  swiped: false,
+  maxHorizontalDelta: 0,
+  maxVerticalDelta: 0
 };
+
+const READING_SWIPE_CANCEL_THRESHOLD = 16;
 
 const UI_IDLE_DELAY = 4000;
 const UI_ACTIVITY_THROTTLE = 120;
@@ -4795,6 +4799,8 @@ function resetReadingSwipeTracking(options = {}) {
   readingSwipeState.startY = 0;
   readingSwipeState.startTime = 0;
   readingSwipeState.active = false;
+  readingSwipeState.maxHorizontalDelta = 0;
+  readingSwipeState.maxVerticalDelta = 0;
   if (!preserveSwipe) {
     readingSwipeState.swiped = false;
   }
@@ -4842,6 +4848,8 @@ function handleReadingPointerDown(event) {
   readingSwipeState.startTime = event.timeStamp || performance.now();
   readingSwipeState.active = true;
   readingSwipeState.swiped = false;
+  readingSwipeState.maxHorizontalDelta = 0;
+  readingSwipeState.maxVerticalDelta = 0;
 }
 
 function handleReadingPointerMove(event) {
@@ -4850,6 +4858,8 @@ function handleReadingPointerMove(event) {
   }
   const dx = event.clientX - readingSwipeState.startX;
   const dy = event.clientY - readingSwipeState.startY;
+  readingSwipeState.maxHorizontalDelta = Math.max(readingSwipeState.maxHorizontalDelta, Math.abs(dx));
+  readingSwipeState.maxVerticalDelta = Math.max(readingSwipeState.maxVerticalDelta, Math.abs(dy));
   if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
     event.preventDefault();
   }
@@ -4863,9 +4873,17 @@ function handleReadingPointerUp(event) {
   const dy = event.clientY - readingSwipeState.startY;
   const elapsed = (event.timeStamp || performance.now()) - readingSwipeState.startTime;
   const horizontalDominant = Math.abs(dx) > Math.abs(dy);
+  const swipeHorizontal = readingSwipeState.maxHorizontalDelta;
+  const swipeVertical = readingSwipeState.maxVerticalDelta;
+  const swipeDominant = swipeHorizontal > swipeVertical;
   if (horizontalDominant && Math.abs(dx) > 60 && elapsed < 600) {
     const direction = dx < 0 ? 1 : -1;
     gotoAdjacentArticle(direction);
+    readingSwipeState.swiped = true;
+    resetReadingSwipeTracking({ preserveSwipe: true });
+    return;
+  }
+  if (swipeDominant && swipeHorizontal > READING_SWIPE_CANCEL_THRESHOLD) {
     readingSwipeState.swiped = true;
     resetReadingSwipeTracking({ preserveSwipe: true });
     return;

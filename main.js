@@ -4783,16 +4783,7 @@ function suppressSwipeClicks(event) {
   if (!swipeState.isSwipe) {
     return;
   }
-  const target = event.target;
-  const allowInteractiveClick = target instanceof Element
-    && target.closest('.maprect, .ad-hotspot, .ad-action, .ad-details__link, a, button, [role="button"], [data-action]');
-
   swipeState.isSwipe = false;
-
-  if (allowInteractiveClick) {
-    return;
-  }
-
   event.preventDefault();
   event.stopPropagation();
 }

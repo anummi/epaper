@@ -14,6 +14,13 @@
   --transition-slow: 320ms ease;
   --stage-padding-block: clamp(1rem, 2.5vw, 1.75rem);
   --stage-padding-inline: clamp(1rem, 3.5vw, 2.75rem);
+  --viewport-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --viewport-height: 100dvh;
+  }
 }
 
 body.theme-dark {
@@ -71,7 +78,8 @@ body {
   display: flex;
   justify-content: flex-start;
   align-items: stretch;
-  min-height: 100vh;
+  min-height: var(--viewport-height);
+  height: var(--viewport-height);
   width: 100%;
   overflow-x: hidden;
   user-select: none;
@@ -124,7 +132,7 @@ body:not(.is-fullscreen) button.menu-item.menu-windowed {
   display: flex;
   flex: 1 1 auto;
   width: 100%;
-  min-height: 100vh;
+  min-height: var(--viewport-height);
   background: var(--surface);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -142,7 +150,7 @@ body:not(.is-fullscreen) button.menu-item.menu-windowed {
   background: var(--surface);
   border-right: 1px solid var(--border);
   z-index: 60;
-  min-height: 100vh;
+  min-height: var(--viewport-height);
   width: var(--menu-width);
   overflow: hidden;
   transition: width var(--transition-slow), transform var(--transition-slow), box-shadow var(--transition-slow), opacity var(--transition-slow);
@@ -349,19 +357,12 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 100vh;
-  height: 100vh;
-  max-height: 100vh;
+  min-height: var(--viewport-height);
+  height: var(--viewport-height);
+  max-height: var(--viewport-height);
   background: radial-gradient(circle at top, rgba(0, 0, 0, 0.06), transparent 55%);
   overflow: hidden;
   touch-action: none;
-}
-
-@supports (height: 100dvh) {
-  .page-stage {
-    height: 100dvh;
-    max-height: 100dvh;
-  }
 }
 
 .page-track {
@@ -436,17 +437,17 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   --spread-page-count: var(--page-count, 1);
   --spread-ratio: calc(var(--page-ratio, 0.75) * var(--spread-page-count));
   width: min(
-	calc(100vw - (2 * var(--stage-padding-inline))),
-    calc((100vh - (2 * var(--stage-padding-block))) * var(--spread-ratio)),
+        calc(100vw - (2 * var(--stage-padding-inline))),
+    calc((var(--viewport-height) - (2 * var(--stage-padding-block))) * var(--spread-ratio)),
     var(--page-max-width, 20000px)
   );
   height: min(
-    calc(100vh - (2 * var(--stage-padding-block))),
+    calc(var(--viewport-height) - (2 * var(--stage-padding-block))),
     calc((100vw - (2 * var(--stage-padding-inline))) / var(--spread-ratio)),
     var(--page-max-height, 20000px)
   );
   aspect-ratio: var(--spread-ratio);
-  max-height: calc(100vh - (2 * var(--stage-padding-block)));
+  max-height: calc(var(--viewport-height) - (2 * var(--stage-padding-block)));
   max-width: calc(100vw - (2 * var(--stage-padding-inline)));
 }
 
@@ -2832,7 +2833,8 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
     box-shadow: 24px 0 45px rgba(15, 23, 42, 0.22);
   }
 
-  body.mobile-menu-open .menu-item.menu-open {
+  body.mobile-menu-open .menu-item.menu-open,
+  body.mobile-menu-animating .menu-item.menu-open {
     display: none;
   }
 
@@ -2897,7 +2899,7 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
 @media (max-width: 960px) {
   .app-shell {
     width: 100%;
-    min-height: 100vh;
+    min-height: var(--viewport-height);
     border-radius: 0;
   }
 

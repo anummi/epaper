@@ -21,6 +21,7 @@
   :root {
     --viewport-height: 100dvh;
   }
+}
 
 body.theme-dark {
   --bg: #0b1120;
@@ -757,7 +758,6 @@ body:not(.theme-dark) .zoom-menu.is-visible.is-persistent {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
   padding: 0.25rem 0.7rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
@@ -919,10 +919,11 @@ body.theme-dark .archive-notice__action:focus-visible {
 }
 
 .zoom-menu__page-label {
-  display: inline-flex;
+  display: block;
   align-items: center;
   font-size: 0.75rem;
   font-weight: 600;
+  margin-left: 0.5rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted-text, var(--text));
@@ -2854,7 +2855,7 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
     box-shadow: 24px 0 45px rgba(15, 23, 42, 0.22);
   }
 
-  body.mobile-menu-open .menu-item.menu-open {
+  body .menu-item.menu-open {
     display: none;
   }
 

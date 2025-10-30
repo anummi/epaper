@@ -12,6 +12,8 @@ const SUPPORTED_LANGUAGES = {
   fi: 'fi-FI',
   en: 'en-US'
 };
+const ARCHIVE_LATEST_VISIBLE_COUNT = 6;
+const ARCHIVE_MONTH_GROUP_THRESHOLD = 12;
 const AD_ACTION_FALLBACKS = {
   openLink: 'Avaa verkkosivusto',
   call: 'Soita',
@@ -38,6 +40,7 @@ const state = {
   adPageLookup: new Map(),
   archiveItems: [],
   archiveLoaded: false,
+  latestIssuePath: null,
   currentIssuePath: null,
   slideDefinitions: [],
   slides: [],
@@ -853,6 +856,19 @@ function buildLayout() {
   zoomMenu.appendChild(zoomPageIndicator);
   shell.appendChild(zoomMenu);
 
+  const archiveNotice = document.createElement('div');
+  archiveNotice.className = 'archive-notice';
+  archiveNotice.hidden = true;
+  archiveNotice.setAttribute('aria-hidden', 'true');
+  const archiveNoticeLabel = document.createElement('span');
+  archiveNoticeLabel.className = 'archive-notice__label';
+  archiveNotice.appendChild(archiveNoticeLabel);
+  const archiveNoticeAction = document.createElement('button');
+  archiveNoticeAction.type = 'button';
+  archiveNoticeAction.className = 'archive-notice__action';
+  archiveNotice.appendChild(archiveNoticeAction);
+  shell.appendChild(archiveNotice);
+
   const mobileMenuBackdrop = document.createElement('div');
   mobileMenuBackdrop.className = 'mobile-menu-backdrop';
   mobileMenuBackdrop.setAttribute('aria-hidden', 'true');
@@ -1288,6 +1304,12 @@ function buildLayout() {
   state.audio.audioElement = audioElement;
   bindAudioElementEvents(audioElement);
 
+  archiveNoticeAction.addEventListener('click', () => {
+    if (state.latestIssuePath) {
+      handleArchiveSelection(state.latestIssuePath);
+    }
+  });
+
   state.dom = {
     shell,
     stage,
@@ -1320,6 +1342,9 @@ function buildLayout() {
     archiveTitle,
     archiveClose,
     archiveList,
+    archiveNotice,
+    archiveNoticeLabel,
+    archiveNoticeAction,
     readingBackdrop,
     readingWindow,
     readingLabel,
@@ -1464,6 +1489,16 @@ function refreshLocalizedTexts(options = {}) {
     dom.adsEmpty.textContent = resolveLabel('adsEmpty', 'Lehdessä ei ole mainoksia.');
   }
 
+  if (dom.archiveNoticeLabel) {
+    dom.archiveNoticeLabel.textContent = resolveLabel('archiveNoticeLabel', 'Arkiston numero');
+  }
+  if (dom.archiveNoticeAction) {
+    const actionLabel = resolveLabel('archiveNoticeAction', 'Palaa uusimpaan numeroon');
+    dom.archiveNoticeAction.textContent = actionLabel;
+    dom.archiveNoticeAction.setAttribute('aria-label', actionLabel);
+    dom.archiveNoticeAction.title = actionLabel;
+  }
+
   if (dom.settingsTitle) {
     dom.settingsTitle.textContent = resolveLabel('settingsTitle', 'Asetukset');
   }
@@ -1495,6 +1530,7 @@ function refreshLocalizedTexts(options = {}) {
   if (state.archiveLoaded) {
     buildArchiveList();
   }
+  updateArchiveIndicator();
   updateAllPagesSizing();
   buildAdsPanelContent();
   updatePageIndicator();
@@ -1696,6 +1732,10 @@ function applyIssue(issue, options = {}) {
   state.viewBox = computeViewBox(issue.res);
   if (Array.isArray(issue.archiveItems) && issue.archiveItems.length) {
     state.archiveItems = issue.archiveItems;
+    const latestEntry = state.archiveItems[0];
+    state.latestIssuePath = latestEntry ? normalizeArchivePath(latestEntry.p) : null;
+  } else if (!Array.isArray(state.archiveItems) || !state.archiveItems.length) {
+    state.latestIssuePath = null;
   }
   state.dom.readingWindow?.classList.remove('reading-window--ad');
   state.activePageIndex = targetPageIndex;
@@ -1718,6 +1758,7 @@ function applyIssue(issue, options = {}) {
     ? `${issue.label} – ${state.config.paper}`
     : state.config.paper;
   updateReadingNavigation();
+  updateArchiveIndicator();
 }
 
 function buildArticlePageLookup(pageMaps) {
@@ -5261,6 +5302,184 @@ function buildAllPagesGrid() {
   });
 }
 
+function getArchiveEntryDate(entry) {
+  if (!entry || !entry.d) {
+    return null;
+  }
+  const date = new Date(entry.d);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date;
+}
+
+function getArchiveEntryParts(entry) {
+  const date = getArchiveEntryDate(entry);
+  if (!date) {
+    return null;
+  }
+  return {
+    date,
+    year: date.getFullYear(),
+    month: date.getMonth()
+  };
+}
+
+function groupArchiveEntriesByYear(entries) {
+  const groups = new Map();
+  const undated = [];
+  entries.forEach(entry => {
+    const parts = getArchiveEntryParts(entry);
+    if (!parts) {
+      undated.push(entry);
+      return;
+    }
+    if (!groups.has(parts.year)) {
+      groups.set(parts.year, []);
+    }
+    groups.get(parts.year).push(entry);
+  });
+  return {
+    groups: Array.from(groups.entries()).map(([year, items]) => ({
+      year: Number(year),
+      entries: items
+    })),
+    undated
+  };
+}
+
+function groupArchiveEntriesByMonth(entries) {
+  const groups = new Map();
+  entries.forEach(entry => {
+    const parts = getArchiveEntryParts(entry);
+    if (!parts) {
+      return;
+    }
+    if (!groups.has(parts.month)) {
+      groups.set(parts.month, []);
+    }
+    groups.get(parts.month).push(entry);
+  });
+  return Array.from(groups.entries()).map(([month, items]) => ({
+    month: Number(month),
+    entries: items
+  }));
+}
+
+function getArchiveMonthLabel(year, month) {
+  try {
+    return new Intl.DateTimeFormat(getLocale(state.settings.language), {
+      month: 'long'
+    }).format(new Date(Date.UTC(year, month, 1)));
+  } catch (error) {
+    console.warn('Kuukauden nimen muotoilu epäonnistui:', error);
+    return '';
+  }
+}
+
+function formatArchiveYearSummary(year, count) {
+  const template = resolveLabel('archiveYearSummary', '{year} ({count})');
+  return formatLabel(template, { year, count });
+}
+
+function formatArchiveMonthSummary(monthLabel, count) {
+  const template = resolveLabel('archiveMonthSummary', '{month} ({count})');
+  return formatLabel(template, { month: monthLabel, count });
+}
+
+function createArchiveListItem(entry, currentPath) {
+  const item = document.createElement('li');
+  item.className = 'archive-panel__entry';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'archive-panel__item';
+  const entryPath = normalizeArchivePath(entry.p);
+  button.dataset.path = entryPath;
+  if (entryPath === currentPath) {
+    button.classList.add('is-active');
+  }
+
+  const figure = document.createElement('div');
+  figure.className = 'archive-panel__media';
+  const img = document.createElement('img');
+  img.loading = 'lazy';
+  img.alt = (entry.d || entry.p || '').trim() || state.config.paper;
+  img.src = getArchiveCoverSrc(entry.p);
+  figure.appendChild(img);
+  button.appendChild(figure);
+
+  const info = document.createElement('div');
+  info.className = 'archive-panel__info';
+  const title = document.createElement('span');
+  title.className = 'archive-panel__date';
+  title.textContent = formatArchiveDate(entry.d) || entry.d || entry.p;
+  info.appendChild(title);
+  button.appendChild(info);
+
+  const accessibleLabel = title.textContent || entry.p || '';
+  if (accessibleLabel) {
+    button.setAttribute('aria-label', accessibleLabel);
+  }
+
+  button.addEventListener('click', () => handleArchiveSelection(entryPath));
+  item.appendChild(button);
+  return item;
+}
+
+function createArchiveSection(titleText, entries, currentPath, extraClass = '') {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return null;
+  }
+  const section = document.createElement('li');
+  section.className = `archive-panel__section${extraClass ? ` ${extraClass}` : ''}`;
+  const heading = document.createElement('h3');
+  heading.className = 'archive-panel__section-title';
+  heading.textContent = titleText;
+  section.appendChild(heading);
+  const sublist = document.createElement('ul');
+  sublist.className = 'archive-panel__section-list';
+  entries.forEach(entry => {
+    sublist.appendChild(createArchiveListItem(entry, currentPath));
+  });
+  section.appendChild(sublist);
+  return section;
+}
+
+function updateArchiveIndicator() {
+  const notice = state.dom.archiveNotice || document.querySelector('.archive-notice');
+  const label = state.dom.archiveNoticeLabel || notice?.querySelector('.archive-notice__label');
+  const action = state.dom.archiveNoticeAction || notice?.querySelector('.archive-notice__action');
+  if (!notice || !label || !action) {
+    return;
+  }
+
+  const latestPath = state.latestIssuePath ? normalizeArchivePath(state.latestIssuePath) : '';
+  const currentPath = state.currentIssuePath ? normalizeArchivePath(state.currentIssuePath) : '';
+  const shouldShow = Boolean(latestPath && currentPath && latestPath !== currentPath);
+  notice.hidden = !shouldShow;
+  notice.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+  notice.classList.toggle('is-visible', shouldShow);
+
+  if (!shouldShow) {
+    return;
+  }
+
+  const baseLabel = resolveLabel('archiveNoticeLabel', 'Arkiston numero');
+  let labelText = baseLabel;
+  const currentEntry = Array.isArray(state.archiveItems)
+    ? state.archiveItems.find(entry => normalizeArchivePath(entry.p) === currentPath)
+    : null;
+  if (currentEntry) {
+    const formattedDate = formatArchiveDate(currentEntry.d);
+    if (formattedDate) {
+      labelText = `${baseLabel} · ${formattedDate}`;
+    } else if (currentEntry.d) {
+      labelText = `${baseLabel} · ${currentEntry.d}`;
+    }
+  }
+  label.textContent = labelText;
+}
+
 function buildArchiveList() {
   const list = state.dom.archiveList || document.querySelector('.archive-panel__list');
   if (!list) {
@@ -5278,48 +5497,126 @@ function buildArchiveList() {
   }
 
   const currentPath = normalizeArchivePath(state.currentIssuePath);
-  state.archiveItems.forEach(entry => {
-    const item = document.createElement('li');
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'archive-panel__item';
-    const entryPath = normalizeArchivePath(entry.p);
-    button.dataset.path = entryPath;
-    if (entryPath === currentPath) {
-      button.classList.add('is-active');
+  const entries = state.archiveItems.slice();
+  const latestEntries = entries.slice(0, ARCHIVE_LATEST_VISIBLE_COUNT);
+  const olderEntries = entries.slice(ARCHIVE_LATEST_VISIBLE_COUNT);
+  const fragment = document.createDocumentFragment();
+
+  const latestSection = createArchiveSection(
+    resolveLabel('archiveLatestIssues', 'Viimeisimmät numerot'),
+    latestEntries,
+    currentPath,
+    'archive-panel__section--latest'
+  );
+  if (latestSection) {
+    fragment.appendChild(latestSection);
+  }
+
+  if (olderEntries.length) {
+    const olderSection = document.createElement('li');
+    olderSection.className = 'archive-panel__section archive-panel__section--older';
+    const olderHeading = document.createElement('h3');
+    olderHeading.className = 'archive-panel__section-title';
+    olderHeading.textContent = resolveLabel('archiveOlderIssues', 'Arkistonumerot');
+    olderSection.appendChild(olderHeading);
+
+    const yearList = document.createElement('div');
+    yearList.className = 'archive-panel__year-list';
+
+    const { groups: yearGroups, undated } = groupArchiveEntriesByYear(olderEntries);
+    const activeEntry = entries.find(entry => normalizeArchivePath(entry.p) === currentPath) || null;
+    const activeParts = activeEntry ? getArchiveEntryParts(activeEntry) : null;
+    const hasActiveYear = Boolean(activeParts);
+    let openedYear = false;
+
+    yearGroups.forEach(({ year, entries: yearEntries }) => {
+      const yearDetails = document.createElement('details');
+      yearDetails.className = 'archive-panel__year';
+      const summary = document.createElement('summary');
+      summary.className = 'archive-panel__year-summary';
+      summary.textContent = formatArchiveYearSummary(year, yearEntries.length);
+      yearDetails.appendChild(summary);
+
+      const shouldGroupByMonth = yearEntries.length > ARCHIVE_MONTH_GROUP_THRESHOLD;
+      if (shouldGroupByMonth) {
+        const monthList = document.createElement('div');
+        monthList.className = 'archive-panel__month-list';
+        const monthGroups = groupArchiveEntriesByMonth(yearEntries);
+        let hasOpenedMonth = false;
+        monthGroups.forEach(({ month, entries: monthEntries }) => {
+          const monthDetails = document.createElement('details');
+          monthDetails.className = 'archive-panel__month';
+          const monthSummary = document.createElement('summary');
+          monthSummary.className = 'archive-panel__month-summary';
+          const monthLabel = getArchiveMonthLabel(year, month) || `${month + 1}`;
+          monthSummary.textContent = formatArchiveMonthSummary(monthLabel, monthEntries.length);
+          monthDetails.appendChild(monthSummary);
+
+          const monthItems = document.createElement('ul');
+          monthItems.className = 'archive-panel__section-list archive-panel__section-list--month';
+          monthEntries.forEach(entry => {
+            monthItems.appendChild(createArchiveListItem(entry, currentPath));
+          });
+          monthDetails.appendChild(monthItems);
+
+          if (activeParts && activeParts.year === year && activeParts.month === month) {
+            monthDetails.open = true;
+            hasOpenedMonth = true;
+          }
+
+          monthList.appendChild(monthDetails);
+        });
+        if (!hasOpenedMonth) {
+          const firstMonth = monthList.firstElementChild;
+          if (firstMonth && firstMonth.tagName === 'DETAILS') {
+            firstMonth.open = true;
+          }
+        }
+        yearDetails.appendChild(monthList);
+      } else {
+        const yearItems = document.createElement('ul');
+        yearItems.className = 'archive-panel__section-list';
+        yearEntries.forEach(entry => {
+          yearItems.appendChild(createArchiveListItem(entry, currentPath));
+        });
+        yearDetails.appendChild(yearItems);
+      }
+
+      const shouldOpenYear = (activeParts && activeParts.year === year) || (!hasActiveYear && !openedYear);
+      yearDetails.open = shouldOpenYear;
+      if (shouldOpenYear) {
+        openedYear = true;
+      }
+
+      yearList.appendChild(yearDetails);
+    });
+
+    if (undated.length) {
+      const undatedDetails = document.createElement('details');
+      undatedDetails.className = 'archive-panel__year archive-panel__year--undated';
+      const undatedSummary = document.createElement('summary');
+      undatedSummary.className = 'archive-panel__year-summary';
+      undatedSummary.textContent = resolveLabel('archiveUnknownDate', 'Tuntematon ajankohta');
+      undatedDetails.appendChild(undatedSummary);
+      const undatedItems = document.createElement('ul');
+      undatedItems.className = 'archive-panel__section-list';
+      undated.forEach(entry => {
+        undatedItems.appendChild(createArchiveListItem(entry, currentPath));
+      });
+      undatedDetails.appendChild(undatedItems);
+      const shouldOpenUndated = !hasActiveYear && !openedYear;
+      undatedDetails.open = shouldOpenUndated;
+      if (shouldOpenUndated) {
+        openedYear = true;
+      }
+      yearList.appendChild(undatedDetails);
     }
 
-    const figure = document.createElement('div');
-    figure.className = 'archive-panel__media';
-    const img = document.createElement('img');
-    img.loading = 'lazy';
-    img.alt = (entry.d || entry.p || '').trim() || state.config.paper;
-    img.src = getArchiveCoverSrc(entry.p);
-    figure.appendChild(img);
-    button.appendChild(figure);
+    olderSection.appendChild(yearList);
+    fragment.appendChild(olderSection);
+  }
 
-    const info = document.createElement('div');
-    info.className = 'archive-panel__info';
-    const title = document.createElement('span');
-    title.className = 'archive-panel__date';
-    title.textContent = formatArchiveDate(entry.d) || entry.d || entry.p;
-    info.appendChild(title);
-    if (entry.p) {
-      const meta = document.createElement('small');
-      meta.className = 'archive-panel__path';
-      meta.textContent = entry.p.replace(/\/$/, '');
-      info.appendChild(meta);
-    }
-    button.appendChild(info);
-    const accessibleLabel = title.textContent || entry.p || '';
-    if (accessibleLabel) {
-      button.setAttribute('aria-label', accessibleLabel);
-    }
-
-    button.addEventListener('click', () => handleArchiveSelection(entryPath));
-    item.appendChild(button);
-    list.appendChild(item);
-  });
+  list.appendChild(fragment);
 }
 
 function formatArchiveDate(value) {

@@ -2920,7 +2920,7 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
 @media (max-width: 960px) {
   .app-shell {
     width: 100%;
-    min-height: 100vh;
+    min-height: var(--viewport-height);
     border-radius: 0;
   }
 

@@ -1986,6 +1986,7 @@ function attachGlobalListeners() {
     audioResumeOverlay,
     audioResumeContinue,
     audioResumeRestart,
+    audioResumeClose,
     mobileMenuButton,
     mobileMenuClose,
     mobileMenuBackdrop

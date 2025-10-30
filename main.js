@@ -86,7 +86,10 @@ const state = {
     idleTimer: null,
     lastActivity: 0,
     isHidden: false,
-    mobileMenuOpen: false
+    mobileMenuOpen: false,
+    mobileMenuAnimating: false,
+    mobileMenuAnimationTimer: null,
+    pendingMobileMenuFocus: false
   },
   dom: {}
 };
@@ -140,6 +143,7 @@ const READING_SWIPE_CANCEL_THRESHOLD = 16;
 
 const UI_IDLE_DELAY = 4000;
 const UI_ACTIVITY_THROTTLE = 120;
+const MOBILE_MENU_ANIMATION_TIMEOUT = 450;
 
 const CLOSE_ICON_DEFINITION = {
   viewBox: '0 0 640 640',
@@ -1514,7 +1518,8 @@ function refreshLocalizedTexts(options = {}) {
   }
 
   if (dom.archiveNoticeLabel) {
-    dom.archiveNoticeLabel.textContent = resolveLabel('archiveNoticeCurrentIssue', 'Arkiston lehti');
+    const archiveLabel = resolveLabel('archiveNoticeCurrentIssue', '');
+    dom.archiveNoticeLabel.textContent = archiveLabel;
   }
   if (dom.archiveNoticeActionLabel) {
     dom.archiveNoticeActionLabel.textContent = resolveLabel('archiveNoticeClose', 'Sulje');
@@ -1950,6 +1955,7 @@ function attachGlobalListeners() {
   state.listenersAttached = true;
 
   const {
+    menuBar,
     stage,
     navPrev,
     navNext,
@@ -1991,6 +1997,9 @@ function attachGlobalListeners() {
     mobileMenuClose,
     mobileMenuBackdrop
   } = state.dom;
+
+  menuBar?.addEventListener('transitionend', handleMobileMenuTransitionEnd);
+  menuBar?.addEventListener('transitioncancel', handleMobileMenuTransitionEnd);
 
   navPrev?.addEventListener('click', () => gotoSlide(state.currentSlide - 1));
   navNext?.addEventListener('click', () => gotoSlide(state.currentSlide + 1));
@@ -2114,9 +2123,80 @@ function collapseDesktopMenu() {
   positionZoomMenu();
 }
 
+function beginMobileMenuAnimation() {
+  if (!state.ui) {
+    return;
+  }
+  if (state.ui.mobileMenuAnimationTimer) {
+    window.clearTimeout(state.ui.mobileMenuAnimationTimer);
+    state.ui.mobileMenuAnimationTimer = null;
+  }
+  if (!state.ui.mobileMenuAnimating) {
+    state.ui.mobileMenuAnimating = true;
+    document.body.classList.add('mobile-menu-animating');
+  }
+  state.ui.mobileMenuAnimationTimer = window.setTimeout(() => {
+    state.ui.mobileMenuAnimationTimer = null;
+    endMobileMenuAnimation();
+  }, MOBILE_MENU_ANIMATION_TIMEOUT);
+  updateMobileMenuButtonVisibility();
+}
+
+function endMobileMenuAnimation() {
+  if (!state.ui) {
+    return;
+  }
+  if (state.ui.mobileMenuAnimationTimer) {
+    window.clearTimeout(state.ui.mobileMenuAnimationTimer);
+    state.ui.mobileMenuAnimationTimer = null;
+  }
+  if (!state.ui.mobileMenuAnimating && !document.body.classList.contains('mobile-menu-animating')) {
+    applyPendingMobileMenuFocus();
+    return;
+  }
+  state.ui.mobileMenuAnimating = false;
+  document.body.classList.remove('mobile-menu-animating');
+  updateMobileMenuButtonVisibility();
+  applyPendingMobileMenuFocus();
+}
+
+function applyPendingMobileMenuFocus() {
+  if (!state.ui) {
+    return;
+  }
+  if (!state.ui.pendingMobileMenuFocus) {
+    state.ui.pendingMobileMenuFocus = false;
+    return;
+  }
+  const button = state.dom?.mobileMenuButton;
+  if (button instanceof HTMLElement) {
+    button.focus({ preventScroll: true });
+  }
+  state.ui.pendingMobileMenuFocus = false;
+}
+
+function handleMobileMenuTransitionEnd(event) {
+  if (!event) {
+    return;
+  }
+  if (event.target !== state.dom?.menuBar) {
+    return;
+  }
+  if (event.propertyName && event.propertyName !== 'transform') {
+    return;
+  }
+  endMobileMenuAnimation();
+}
+
 function shouldHideMobileMenuButton() {
   if (window.innerWidth >= 900) {
     return false;
+  }
+  if (state.ui.mobileMenuAnimating) {
+    return true;
+  }
+  if (document.body.classList.contains('mobile-menu-animating')) {
+    return true;
   }
   if (state.ui.mobileMenuOpen) {
     return true;
@@ -2164,6 +2244,9 @@ function refreshMobileMenuAccessibility() {
   if (!isSmallViewport && document.body.classList.contains('mobile-menu-open')) {
     document.body.classList.remove('mobile-menu-open');
   }
+  if (!isSmallViewport) {
+    endMobileMenuAnimation();
+  }
   if (menuBar) {
     menuBar.setAttribute('aria-hidden', isSmallViewport && !isOpen ? 'true' : 'false');
   }
@@ -2179,12 +2262,15 @@ function refreshMobileMenuAccessibility() {
 function openMobileMenu() {
   if (window.innerWidth >= 900) {
     state.ui.mobileMenuOpen = false;
+    state.ui.pendingMobileMenuFocus = false;
     refreshMobileMenuAccessibility();
     return;
   }
   if (state.ui.mobileMenuOpen) {
     return;
   }
+  beginMobileMenuAnimation();
+  state.ui.pendingMobileMenuFocus = false;
   state.ui.mobileMenuOpen = true;
   document.body.classList.add('mobile-menu-open');
   refreshMobileMenuAccessibility();
@@ -2197,15 +2283,27 @@ function openMobileMenu() {
 
 function closeMobileMenu(options = {}) {
   const wasOpen = state.ui.mobileMenuOpen || document.body.classList.contains('mobile-menu-open');
+  const focusTrigger = wasOpen && Boolean(options.focusTrigger);
+  if (wasOpen) {
+    beginMobileMenuAnimation();
+  }
   state.ui.mobileMenuOpen = false;
   document.body.classList.remove('mobile-menu-open');
   refreshMobileMenuAccessibility();
   positionZoomMenu();
   if (wasOpen) {
-    const focusTrigger = Boolean(options.focusTrigger);
-    if (focusTrigger && state.dom?.mobileMenuButton instanceof HTMLElement) {
-      state.dom.mobileMenuButton.focus({ preventScroll: true });
+    if (focusTrigger) {
+      if (state.ui.mobileMenuAnimating) {
+        state.ui.pendingMobileMenuFocus = true;
+      } else {
+        state.ui.pendingMobileMenuFocus = true;
+        applyPendingMobileMenuFocus();
+      }
+    } else {
+      state.ui.pendingMobileMenuFocus = false;
     }
+  } else {
+    state.ui.pendingMobileMenuFocus = false;
   }
 }
 
@@ -5558,7 +5656,7 @@ function updateArchiveIndicator() {
     return;
   }
 
-  const baseLabel = resolveLabel('archiveNoticeCurrentIssue', 'Arkiston lehti');
+  const baseLabel = resolveLabel('archiveNoticeCurrentIssue', '');
   let labelText = baseLabel;
   const currentEntry = Array.isArray(state.archiveItems)
     ? state.archiveItems.find(entry => normalizeArchivePath(entry.p) === currentPath)
@@ -5566,9 +5664,9 @@ function updateArchiveIndicator() {
   if (currentEntry) {
     const formattedDate = formatArchiveDate(currentEntry.d);
     if (formattedDate) {
-      labelText = `${baseLabel} - ${formattedDate}`;
+      labelText = `${baseLabel} – ${formattedDate}`;
     } else if (currentEntry.d) {
-      labelText = `${baseLabel} - ${currentEntry.d}`;
+      labelText = `${baseLabel} – ${currentEntry.d}`;
     }
   }
   label.textContent = labelText;

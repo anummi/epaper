@@ -426,6 +426,16 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   max-width: calc(100vw - (2 * var(--stage-padding-inline)));
 }
 
+.page-surface[data-page-count="1"] {
+  background: transparent;
+  box-shadow: none;
+}
+
+.page-surface[data-page-count="1"] .page-image {
+  background: var(--surface);
+  box-shadow: 0 25px 50px rgba(15, 23, 42, 0.2);
+}
+
 @media (min-width: 900px) {
   .page-surface[data-page-count="1"] {
     --spread-page-count: 2;

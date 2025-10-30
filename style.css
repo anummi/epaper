@@ -1355,6 +1355,7 @@ body.theme-dark .print-panel__action {
   gap: var(--preview-gap);
   overflow-y: auto;
   padding-bottom: 1rem;
+	justify-content: center;
 }
 .all-pages__grid button:first-child {
   margin-inline-start: var(--preview-width);

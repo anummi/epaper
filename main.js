@@ -4450,11 +4450,14 @@ function resetZoom(options = {}) {
   state.zoom.translateX = 0;
   state.zoom.translateY = 0;
   const surface = targetSurface instanceof Element ? targetSurface : getActiveSurface();
+  if (surface instanceof Element) {
+    clearSurfaceZoomStyles(surface);
+  }
   applyZoom(surface || null);
   if (Array.isArray(additionalSurfaces)) {
     additionalSurfaces.forEach(extra => {
       if (extra instanceof Element) {
-        extra.style.transform = 'translate(0px, 0px) scale(1)';
+        clearSurfaceZoomStyles(extra);
         extra.classList.remove('is-zoomed');
       }
     });
@@ -4499,6 +4502,54 @@ function setZoom(scale, focalPoint) {
   registerUserActivity();
 }
 
+function updateSurfaceDimensions(surface, scale) {
+  if (!(surface instanceof HTMLElement)) {
+    return;
+  }
+
+  const normalizedScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  const isZoomed = normalizedScale > 1;
+
+  let baseWidth = Number.parseFloat(surface.dataset.baseWidth);
+  let baseHeight = Number.parseFloat(surface.dataset.baseHeight);
+
+  if (!Number.isFinite(baseWidth) || baseWidth <= 0 || !Number.isFinite(baseHeight) || baseHeight <= 0) {
+    const rect = surface.getBoundingClientRect();
+    const divisor = isZoomed ? normalizedScale : 1;
+    baseWidth = rect.width / divisor;
+    baseHeight = rect.height / divisor;
+  }
+
+  if (!Number.isFinite(Number.parseFloat(surface.dataset.baseWidth)) || Number.parseFloat(surface.dataset.baseWidth) <= 0) {
+    surface.dataset.baseWidth = String(baseWidth);
+  }
+  if (!Number.isFinite(Number.parseFloat(surface.dataset.baseHeight)) || Number.parseFloat(surface.dataset.baseHeight) <= 0) {
+    surface.dataset.baseHeight = String(baseHeight);
+  }
+
+  if (isZoomed) {
+    const width = baseWidth * normalizedScale;
+    const height = baseHeight * normalizedScale;
+    surface.style.width = `${width}px`;
+    surface.style.height = `${height}px`;
+    surface.style.maxWidth = 'none';
+    surface.style.maxHeight = 'none';
+  } else {
+    clearSurfaceZoomStyles(surface);
+  }
+}
+
+function clearSurfaceZoomStyles(surface) {
+  if (!(surface instanceof HTMLElement)) {
+    return;
+  }
+  surface.style.transform = 'translate3d(0px, 0px, 0px)';
+  surface.style.width = '';
+  surface.style.height = '';
+  surface.style.maxWidth = '';
+  surface.style.maxHeight = '';
+}
+
 function applyZoom(surface) {
   if (surface instanceof Element) {
     pendingZoomSurface = surface;
@@ -4514,7 +4565,12 @@ function applyZoom(surface) {
     pendingZoomSurface = null;
     const isZoomed = state.zoom.scale > 1;
     if (target) {
-      target.style.transform = `translate(${state.zoom.translateX}px, ${state.zoom.translateY}px) scale(${state.zoom.scale})`;
+      updateSurfaceDimensions(target, state.zoom.scale);
+      if (!isZoomed) {
+        target.style.transform = 'translate3d(0px, 0px, 0px)';
+      } else {
+        target.style.transform = `translate3d(${state.zoom.translateX}px, ${state.zoom.translateY}px, 0px)`;
+      }
       target.classList.toggle('is-zoomed', isZoomed);
     }
     document.body.classList.toggle('is-zoomed', isZoomed);
@@ -4602,9 +4658,22 @@ function constrainTranslation(surface, translateX, translateY, scale) {
 }
 
 function captureBaseSize(surface) {
+  if (!(surface instanceof Element)) {
+    return;
+  }
+
   const rect = surface.getBoundingClientRect();
-  surface.dataset.baseWidth = String(rect.width);
-  surface.dataset.baseHeight = String(rect.height);
+  if (!Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width <= 0 || rect.height <= 0) {
+    return;
+  }
+
+  const isZoomed = surface.classList.contains('is-zoomed');
+  const scale = isZoomed ? Math.max(state.zoom.scale, 1) : 1;
+  const baseWidth = rect.width / (scale || 1);
+  const baseHeight = rect.height / (scale || 1);
+
+  surface.dataset.baseWidth = String(baseWidth);
+  surface.dataset.baseHeight = String(baseHeight);
 }
 
 function handleWheel(event) {

@@ -574,6 +574,15 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   z-index: 5;
 }
 
+
+@media (pointer: coarse) {
+  /* Tyylit kosketuslaitteille (esim. puhelimet, tabletit) */
+	.page-image .ad-actions {
+	  display: none;
+  }
+}
+
+
 body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot,
 body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-hotspot .ad-actions,
 body.is-zoomed:not(.ads-clickable-when-zoomed) .ad-action {

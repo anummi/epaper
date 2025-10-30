@@ -89,7 +89,7 @@ body.is-zoomed {
   overflow: hidden;
   --menu-translate: -100%;
   --shell-padding-left: 0px;
-  --controls-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1rem, 3.5vh, 1.5rem));
+  /* --controls-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1rem, 3.5vh, 1.5rem)); */
 }
 
 body.print-open {
@@ -744,7 +744,7 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
+  padding: 0.25rem 0.7rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 12px 35px rgba(15, 23, 42, 0.2);
@@ -2842,6 +2842,9 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
   }
   
   body.mobile-menu-open .mobile-menu-button {
+    display: none;
+  }
+  button.mobile-menu-button.mobile-menu-button--hidden {
     display: none;
   }
 

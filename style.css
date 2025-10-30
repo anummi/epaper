@@ -337,7 +337,6 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   justify-content: center;
   width: 100%;
   min-height: 100vh;
-  padding-block: var(--stage-padding-block);
   background: radial-gradient(circle at top, rgba(0, 0, 0, 0.06), transparent 55%);
   overflow: hidden;
   touch-action: none;
@@ -412,7 +411,8 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   touch-action: none;
   will-change: transform;
   --page-count: 1;
-  --spread-ratio: calc(var(--page-ratio, 0.75) * var(--page-count, 1));
+  --spread-page-count: var(--page-count, 1);
+  --spread-ratio: calc(var(--page-ratio, 0.75) * var(--spread-page-count));
   width: min(
     calc(100vw - (2 * var(--stage-padding-inline))),
     calc((100vh - (2 * var(--stage-padding-block))) * var(--spread-ratio))
@@ -424,6 +424,17 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   aspect-ratio: var(--spread-ratio);
   max-height: calc(100vh - (2 * var(--stage-padding-block)));
   max-width: calc(100vw - (2 * var(--stage-padding-inline)));
+}
+
+@media (min-width: 900px) {
+  .page-surface[data-page-count="1"] {
+    --spread-page-count: 2;
+  }
+
+  .page-surface[data-page-count="1"] .page-image {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
 }
 
 .page-surface.is-zoomed {
@@ -698,7 +709,7 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.5rem;
+  padding: 0.5rem 1rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 12px 35px rgba(15, 23, 42, 0.2);
@@ -741,6 +752,10 @@ body.is-zoomed .zoom-menu__page-label {
 .zoom-menu.is-persistent .zoom-menu__page-label {
   display: inline-flex;
   align-items: center;
+}
+
+body.is-zoomed .zoom-menu.is-persistent .zoom-menu__page-label {
+  display: none;
 }
 
 body.ui-controls-hidden .zoom-menu.is-visible {
@@ -2465,7 +2480,7 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
   }
 
   .menu-bar {
-    width: min(18rem, 80vw);
+    width: min(15rem, 80vw);
     transform: translateX(-110%);
     box-shadow: none;
     border-right: none;
@@ -2506,8 +2521,7 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
   }
 
   body.menu-collapsed .menu-item {
-    justify-content: flex-start;
-    gap: 0.75rem;
+    justify-content: space-between;
     padding: 0.75rem 1rem;
   }
 
@@ -2517,10 +2531,11 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
     max-width: 100%;
   }
 
-  .menu-bar .menu-content {
+  body.menu-collapsed  .menu-bar .menu-content {
     padding-top: calc(clamp(1rem, 2vw, 1.5rem) + 2.75rem);
     align-items: stretch;
     gap: 0.75rem;
+    padding-left: 0;
   }
 
   .menu-item {
@@ -2565,10 +2580,6 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
 
   .menu-item span {
     font-size: 0.85rem;
-  }
-
-  .page-stage {
-    padding: 0.5rem;
   }
 
   .page-surface {

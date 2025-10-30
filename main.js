@@ -328,6 +328,19 @@ function formatLabel(template, replacements = {}) {
   }, template);
 }
 
+function derivePageIndicatorLabel(template, fallback) {
+  if (typeof template === 'string') {
+    const match = template.match(/^[^{]+/);
+    if (match) {
+      const value = match[0].trim();
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return fallback;
+}
+
 function getNavigationLabelByAction(action) {
   if (!action) {
     return '';
@@ -927,10 +940,6 @@ function buildLayout() {
   zoomIn.className = 'zoom-button zoom-in';
   zoomIn.textContent = '+';
   zoomMenu.appendChild(zoomIn);
-  const zoomReset = document.createElement('button');
-  zoomReset.type = 'button';
-  zoomReset.className = 'zoom-button zoom-reset';
-  zoomMenu.appendChild(zoomReset);
   const zoomPageLabel = document.createElement('span');
   zoomPageLabel.className = 'zoom-menu__page-label';
   zoomPageLabel.hidden = true;
@@ -1430,7 +1439,6 @@ function buildLayout() {
     zoomMenu,
     zoomOut,
     zoomIn,
-    zoomReset,
     zoomPageLabel,
     zoomPageIndicator,
     allPages,
@@ -1534,11 +1542,6 @@ function refreshLocalizedTexts(options = {}) {
   dom.navNext?.setAttribute('aria-label', resolveLabel('nextPage', 'Seuraava sivu'));
   dom.zoomOut?.setAttribute('aria-label', resolveLabel('zoomOut', 'Zoomaa ulos'));
   dom.zoomIn?.setAttribute('aria-label', resolveLabel('zoomIn', 'Zoomaa sisään'));
-  if (dom.zoomReset) {
-    const resetLabel = resolveLabel('zoomReset', 'Palauta');
-    dom.zoomReset.textContent = resetLabel;
-    dom.zoomReset.setAttribute('aria-label', resetLabel);
-  }
   if (dom.mobileMenuButton) {
     const openLabel = resolveLabel('openMenu', 'Avaa valikko');
     dom.mobileMenuButton.setAttribute('aria-label', openLabel);
@@ -2045,7 +2048,6 @@ function attachGlobalListeners() {
     navNext,
     zoomIn,
     zoomOut,
-    zoomReset,
     allPages,
     allPagesClose,
     printPanel,
@@ -2090,7 +2092,6 @@ function attachGlobalListeners() {
 
   zoomIn?.addEventListener('click', () => adjustZoom(1));
   zoomOut?.addEventListener('click', () => adjustZoom(-1));
-  zoomReset?.addEventListener('click', resetZoom);
   
   allPagesClose?.addEventListener('click', () => toggleAllPages(false));
   allPages?.addEventListener('click', event => {
@@ -4478,14 +4479,16 @@ function updatePageIndicator() {
 
   const isZoomed = state.zoom.scale > 1;
   const persistentZoom = shouldKeepZoomMenuVisible();
-  const showZoomIndicator = isZoomed;
-  const showZoomLabel = persistentZoom && !isZoomed;
-  const hideMainIndicator = isZoomed || persistentZoom;
+  const shouldShowZoomInfo = isZoomed || persistentZoom;
+  const showZoomIndicator = shouldShowZoomInfo;
+  const showZoomLabel = shouldShowZoomInfo;
+  const hideMainIndicator = shouldShowZoomInfo;
   const pages = [...current.pages].sort((a, b) => a - b);
   const firstPage = pages[0] + 1;
   const lastPage = pages[pages.length - 1] + 1;
   let text = '';
   let shortText = '';
+  let labelText = '';
 
   if (pages.length > 1 && firstPage !== lastPage) {
     const template = resolveLabel('pageIndicatorRange', 'Sivut {from}–{to} / {total}');
@@ -4495,6 +4498,8 @@ function updatePageIndicator() {
       total: totalPages
     });
     shortText = `${firstPage}–${lastPage} / ${totalPages}`;
+    const fallback = state.settings.language === 'en' ? 'Pages' : 'Sivut';
+    labelText = derivePageIndicatorLabel(template, fallback);
   } else {
     const template = resolveLabel('pageIndicatorSingle', 'Sivu {page} / {total}');
     text = formatLabel(template, {
@@ -4502,6 +4507,8 @@ function updatePageIndicator() {
       total: totalPages
     });
     shortText = `${firstPage} / ${totalPages}`;
+    const fallback = state.settings.language === 'en' ? 'Page' : 'Sivu';
+    labelText = derivePageIndicatorLabel(template, fallback);
   }
 
   if (indicator) {
@@ -4511,7 +4518,7 @@ function updatePageIndicator() {
   }
 
   if (zoomLabel) {
-    zoomLabel.textContent = text;
+    zoomLabel.textContent = labelText;
     zoomLabel.hidden = !showZoomLabel;
     zoomLabel.setAttribute('aria-hidden', showZoomLabel ? 'false' : 'true');
   }
@@ -4677,7 +4684,7 @@ function applyZoom(surface) {
 }
 
 function updateZoomUI() {
-  const { zoomIn, zoomOut, zoomReset, zoomPageLabel, zoomPageIndicator } = state.dom || {};
+  const { zoomIn, zoomOut, zoomPageLabel, zoomPageIndicator } = state.dom || {};
   const isZoomed = state.zoom.scale > 1;
   const persistent = shouldKeepZoomMenuVisible();
 
@@ -4687,19 +4694,13 @@ function updateZoomUI() {
   if (zoomOut) {
     zoomOut.disabled = state.zoom.scale <= minScale;
   }
-  if (zoomReset) {
-    const showReset = isZoomed;
-    zoomReset.hidden = !showReset;
-    zoomReset.setAttribute('aria-hidden', showReset ? 'false' : 'true');
-    zoomReset.disabled = state.zoom.scale === 1;
-  }
   if (zoomPageLabel) {
-    const showLabel = persistent && !isZoomed;
+    const showLabel = persistent || isZoomed;
     zoomPageLabel.hidden = !showLabel;
     zoomPageLabel.setAttribute('aria-hidden', showLabel ? 'false' : 'true');
   }
   if (zoomPageIndicator) {
-    const showIndicator = isZoomed;
+    const showIndicator = isZoomed || persistent;
     zoomPageIndicator.hidden = !showIndicator;
     zoomPageIndicator.setAttribute('aria-hidden', showIndicator ? 'false' : 'true');
   }

@@ -81,7 +81,7 @@ body.is-zoomed {
   overflow: hidden;
   --menu-translate: -100%;
   --shell-padding-left: 0px;
-  --controls-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1rem, 3.5vh, 1.5rem));
+  /* --controls-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1rem, 3.5vh, 1.5rem)); */
 }
 
 body.print-open {
@@ -194,23 +194,24 @@ body:not(.menu-collapsed) .menu-bar {
   height: clamp(2.75rem, 4vw, 3.25rem);
   padding: 0;
   border-radius: 999px;
-  border: none;
-  background: var(--accent);
-  color: #fff;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 20px 40px rgba(15, 23, 42, 0.22);
   z-index: 70;
   transition: transform var(--transition), box-shadow var(--transition), background var(--transition);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  color: #1e293b;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-button.mobile-menu-button {}
 
 .mobile-menu-button:focus-visible,
 .mobile-menu-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.28);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 body.theme-dark .mobile-menu-button {
@@ -740,6 +741,14 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
   color: #0b1120;
 }
 
+body:not(.theme-dark) .zoom-menu.is-visible.is-persistent {
+    background: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.15);
+    backdrop-filter: blur(15px) saturate(160%);
+    -webkit-backdrop-filter: blur(15px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
 .zoom-menu {
   position: fixed;
   bottom: var(--controls-offset);
@@ -749,7 +758,7 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
+  padding: 0.25rem 0.7rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 12px 35px rgba(15, 23, 42, 0.2);
@@ -944,13 +953,15 @@ body.theme-dark .zoom-menu {
 .zoom-button {
   min-width: 3rem;
   padding: 0.5rem 0.75rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition), color var(--transition), border-color var(--transition);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  color: #1e293b; /* tummahko harmaa/sinertävä teksti */
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  border-radius: 999px;
 }
 
 .zoom-button:disabled {
@@ -960,9 +971,9 @@ body.theme-dark .zoom-menu {
 
 .zoom-button:hover:not(:disabled),
 .zoom-button:focus-visible:not(:disabled) {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
 }
 
 body.theme-dark .zoom-button {

@@ -2362,8 +2362,8 @@ body.theme-dark .archive-panel__close:focus-visible {
 
 .archive-panel__year[open],
 .archive-panel__month[open] {
-  background: rgba(0, 87, 184, 0.08);
-  border-color: rgba(0, 87, 184, 0.35);
+  background: rgb(246 246 247);
+  border-color: rgb(151 151 151 / 35%);
 }
 
 body.theme-dark .archive-panel__year,

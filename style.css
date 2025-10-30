@@ -193,7 +193,7 @@ body:not(.menu-collapsed) .menu-bar {
 .mobile-menu-button {
   position: fixed;
   bottom: var(--controls-offset);
-  right: clamp(1.25rem, 4vw, 3rem);
+  right: clamp(1rem, 4vw, 3rem);
   display: none;
   align-items: center;
   justify-content: center;
@@ -748,6 +748,7 @@ body:not(.theme-dark) .zoom-menu.is-visible.is-persistent {
     backdrop-filter: blur(15px) saturate(160%);
     -webkit-backdrop-filter: blur(15px) saturate(160%);
     border: 1px solid rgba(255, 255, 255, 0.4);
+    gap: 0.3rem;
 }
 
 .zoom-menu {
@@ -758,7 +759,7 @@ body:not(.theme-dark) .zoom-menu.is-visible.is-persistent {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.25rem 0.7rem;
+  padding: 0.15rem 0.7rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 12px 35px rgba(15, 23, 42, 0.2);
@@ -908,7 +909,7 @@ body.theme-dark .archive-notice__action:focus-visible {
 
 .zoom-menu__page-indicator {
   align-self: center;
-  padding: 0 0.75rem;
+  padding: 0 0.15rem;
   font-size: 0.85rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -923,7 +924,7 @@ body.theme-dark .archive-notice__action:focus-visible {
   align-items: center;
   font-size: 0.75rem;
   font-weight: 600;
-  margin-left: 0.5rem;
+  margin-left: 0.4rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted-text, var(--text));
@@ -952,8 +953,8 @@ body.theme-dark .zoom-menu {
 }
 
 .zoom-button {
-  min-width: 3rem;
-  padding: 0.5rem 0.75rem;
+  min-width: 2.5rem;
+  padding: 0.5rem;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;

@@ -861,13 +861,21 @@ function buildLayout() {
   archiveNotice.hidden = true;
   archiveNotice.setAttribute('aria-hidden', 'true');
   const archiveNoticeLabel = document.createElement('span');
-  archiveNoticeLabel.className = 'archive-notice__label visually-hidden';
+  archiveNoticeLabel.className = 'archive-notice__label';
   archiveNoticeLabel.id = 'archive-notice-label';
   archiveNotice.appendChild(archiveNoticeLabel);
   const archiveNoticeAction = document.createElement('button');
   archiveNoticeAction.type = 'button';
   archiveNoticeAction.className = 'archive-notice__action';
   archiveNoticeAction.setAttribute('aria-describedby', archiveNoticeLabel.id);
+  const archiveNoticeActionLabel = document.createElement('span');
+  archiveNoticeActionLabel.className = 'archive-notice__action-label';
+  archiveNoticeAction.appendChild(archiveNoticeActionLabel);
+  const archiveNoticeActionIcon = document.createElement('span');
+  archiveNoticeActionIcon.className = 'archive-notice__action-icon';
+  archiveNoticeActionIcon.setAttribute('aria-hidden', 'true');
+  archiveNoticeActionIcon.textContent = '×';
+  archiveNoticeAction.appendChild(archiveNoticeActionIcon);
   archiveNotice.appendChild(archiveNoticeAction);
   shell.appendChild(archiveNotice);
 
@@ -1281,6 +1289,15 @@ function buildLayout() {
   audioResumeOverlay.setAttribute('aria-modal', 'true');
   const audioResumeDialog = document.createElement('div');
   audioResumeDialog.className = 'audio-resume__dialog';
+  const audioResumeClose = document.createElement('button');
+  audioResumeClose.type = 'button';
+  audioResumeClose.className = 'audio-resume__close';
+  const audioResumeCloseIcon = createCloseIconElement();
+  if (audioResumeCloseIcon) {
+    audioResumeClose.appendChild(audioResumeCloseIcon);
+  } else {
+    audioResumeClose.textContent = '×';
+  }
   const audioResumeMessage = document.createElement('p');
   audioResumeMessage.className = 'audio-resume__message';
   audioResumeMessage.id = 'audio-resume-message';
@@ -1295,6 +1312,7 @@ function buildLayout() {
   audioResumeRestart.className = 'audio-resume__button audio-resume__button--secondary';
   audioResumeActions.appendChild(audioResumeContinue);
   audioResumeActions.appendChild(audioResumeRestart);
+  audioResumeDialog.appendChild(audioResumeClose);
   audioResumeDialog.appendChild(audioResumeMessage);
   audioResumeDialog.appendChild(audioResumeActions);
   audioResumeOverlay.appendChild(audioResumeDialog);
@@ -1347,6 +1365,8 @@ function buildLayout() {
     archiveNotice,
     archiveNoticeLabel,
     archiveNoticeAction,
+    archiveNoticeActionLabel,
+    archiveNoticeActionIcon,
     readingBackdrop,
     readingWindow,
     readingLabel,
@@ -1389,9 +1409,11 @@ function buildLayout() {
     audioResumeMessage,
     audioResumeContinue,
     audioResumeRestart,
+    audioResumeClose,
     mobileMenuButton,
     mobileMenuClose,
-    mobileMenuBackdrop
+    mobileMenuBackdrop,
+    audioMenuItem: null
   };
 
   refreshMobileMenuAccessibility();
@@ -1492,11 +1514,13 @@ function refreshLocalizedTexts(options = {}) {
   }
 
   if (dom.archiveNoticeLabel) {
-    dom.archiveNoticeLabel.textContent = resolveLabel('archiveNoticeLabel', 'Arkiston numero');
+    dom.archiveNoticeLabel.textContent = resolveLabel('archiveNoticeCurrentIssue', 'Arkiston lehti');
+  }
+  if (dom.archiveNoticeActionLabel) {
+    dom.archiveNoticeActionLabel.textContent = resolveLabel('archiveNoticeClose', 'Sulje');
   }
   if (dom.archiveNoticeAction) {
-    const actionLabel = resolveLabel('archiveNoticeAction', 'Palaa uusimpaan numeroon');
-    dom.archiveNoticeAction.textContent = actionLabel;
+    const actionLabel = resolveLabel('closeArchive', 'Sulje arkisto');
     dom.archiveNoticeAction.setAttribute('aria-label', actionLabel);
     dom.archiveNoticeAction.title = actionLabel;
   }
@@ -1792,6 +1816,9 @@ function buildNavigation() {
   }
 
   container.innerHTML = '';
+  if (state.dom) {
+    state.dom.audioMenuItem = null;
+  }
 
   const navigationItems = Array.isArray(state.config?.navigation)
     ? state.config.navigation
@@ -1834,7 +1861,12 @@ function buildNavigation() {
     }
 
     container.appendChild(button);
+    if (item.action === 'audio' && state.dom) {
+      state.dom.audioMenuItem = button;
+    }
   });
+
+  updateAudioMenuVisibility();
 }
 
 function bindNavigationHandlers() {
@@ -2037,6 +2069,12 @@ function attachGlobalListeners() {
   audioBackdrop?.addEventListener('click', () => stopAudioPlayback());
   audioResumeContinue?.addEventListener('click', handleAudioResumeContinue);
   audioResumeRestart?.addEventListener('click', handleAudioResumeRestart);
+  audioResumeClose?.addEventListener('click', () => stopAudioPlayback());
+  audioResumeOverlay?.addEventListener('click', event => {
+    if (event.target === audioResumeOverlay) {
+      stopAudioPlayback();
+    }
+  });
 
   mobileMenuButton?.addEventListener('click', toggleMobileMenu);
   mobileMenuClose?.addEventListener('click', () => closeMobileMenu({ focusTrigger: true }));
@@ -3136,7 +3174,37 @@ function handleAudioTimelineKeydown(event) {
   updateAudioUI();
 }
 
+function updateAudioMenuVisibility() {
+  const container = state.dom?.menuContent;
+  if (!container) {
+    return;
+  }
+  let button = state.dom?.audioMenuItem || null;
+  if (!button || !container.contains(button)) {
+    button = container.querySelector('[data-action="audio"]');
+    if (button instanceof HTMLElement) {
+      state.dom.audioMenuItem = button;
+    } else {
+      button = null;
+    }
+  }
+  if (!(button instanceof HTMLElement)) {
+    return;
+  }
+  const hasAudio = state.audio.queue.length > 0;
+  if (hasAudio) {
+    button.hidden = false;
+    button.setAttribute('aria-hidden', 'false');
+    button.tabIndex = 0;
+  } else {
+    button.hidden = true;
+    button.setAttribute('aria-hidden', 'true');
+    button.tabIndex = -1;
+  }
+}
+
 function updateAudioUI() {
+  updateAudioMenuVisibility();
   const {
     audioBackdrop,
     audioPlayer,
@@ -3153,7 +3221,8 @@ function updateAudioUI() {
     audioResumeOverlay,
     audioResumeMessage,
     audioResumeContinue,
-    audioResumeRestart
+    audioResumeRestart,
+    audioResumeClose
   } = state.dom;
   const queue = state.audio.queue;
   const entry = getCurrentAudioEntry();
@@ -3264,6 +3333,12 @@ function updateAudioUI() {
       const template = resolveLabel('audioResumePrompt', 'Jatketaanko kohdasta "{title}" vai aloitetaan alusta?');
       audioResumeMessage.textContent = template.replace('{title}', resumeTitle);
     }
+  }
+
+  if (audioResumeClose) {
+    const closeLabel = resolveLabel('audioCloseLabel', 'Sulje kuuntelu');
+    audioResumeClose.setAttribute('aria-label', closeLabel);
+    audioResumeClose.title = closeLabel;
   }
 
   updateMobileMenuButtonVisibility();
@@ -3565,10 +3640,26 @@ function renderSlides() {
 function getStageWidth() {
   const track = state.dom?.pageTrack;
   if (track) {
-    return track.clientWidth;
+    const width = track.clientWidth;
+    if (width > 0) {
+      return width;
+    }
   }
   const stage = document.querySelector('.page-stage');
-  return stage ? stage.clientWidth : 0;
+  if (stage) {
+    const width = stage.clientWidth;
+    if (width > 0) {
+      return width;
+    }
+  }
+  const surface = getActiveSurface();
+  if (surface) {
+    const rect = surface.getBoundingClientRect();
+    if (rect.width > 0) {
+      return rect.width;
+    }
+  }
+  return 0;
 }
 
 function positionSlides(activeIndex, { immediate = false } = {}) {
@@ -5466,7 +5557,7 @@ function updateArchiveIndicator() {
     return;
   }
 
-  const baseLabel = resolveLabel('archiveNoticeLabel', 'Arkiston numero');
+  const baseLabel = resolveLabel('archiveNoticeCurrentIssue', 'Arkiston lehti');
   let labelText = baseLabel;
   const currentEntry = Array.isArray(state.archiveItems)
     ? state.archiveItems.find(entry => normalizeArchivePath(entry.p) === currentPath)
@@ -5474,9 +5565,9 @@ function updateArchiveIndicator() {
   if (currentEntry) {
     const formattedDate = formatArchiveDate(currentEntry.d);
     if (formattedDate) {
-      labelText = `${baseLabel} · ${formattedDate}`;
+      labelText = `${baseLabel} - ${formattedDate}`;
     } else if (currentEntry.d) {
-      labelText = `${baseLabel} · ${currentEntry.d}`;
+      labelText = `${baseLabel} - ${currentEntry.d}`;
     }
   }
   label.textContent = labelText;
@@ -5631,9 +5722,8 @@ function formatArchiveDate(value) {
   }
   try {
     return new Intl.DateTimeFormat(getLocale(state.settings.language), {
-      weekday: 'long',
       year: 'numeric',
-      month: 'long',
+      month: 'numeric',
       day: 'numeric'
     }).format(date);
   } catch (error) {

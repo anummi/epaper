@@ -414,12 +414,14 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   --spread-page-count: var(--page-count, 1);
   --spread-ratio: calc(var(--page-ratio, 0.75) * var(--spread-page-count));
   width: min(
-    calc(100vw - (2 * var(--stage-padding-inline))),
-    calc((100vh - (2 * var(--stage-padding-block))) * var(--spread-ratio))
+	calc(100vw - (2 * var(--stage-padding-inline))),
+    calc((100vh - (2 * var(--stage-padding-block))) * var(--spread-ratio)),
+    var(--page-max-width, 20000px)
   );
   height: min(
     calc(100vh - (2 * var(--stage-padding-block))),
-    calc((100vw - (2 * var(--stage-padding-inline))) / var(--spread-ratio))
+    calc((100vw - (2 * var(--stage-padding-inline))) / var(--spread-ratio)),
+    var(--page-max-height, 20000px)
   );
   aspect-ratio: var(--spread-ratio);
   max-height: calc(100vh - (2 * var(--stage-padding-block)));

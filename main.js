@@ -3901,6 +3901,17 @@ function createSlide(pages) {
     : 0.75;
   const safeRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 0.75;
   surface.style.setProperty('--page-ratio', String(safeRatio));
+  if (state.viewBox && Number.isFinite(state.viewBox.width) && Number.isFinite(state.viewBox.height)) {
+    const pageWidth = Math.max(0, Number(state.viewBox.width));
+    const pageHeight = Math.max(0, Number(state.viewBox.height));
+    if (pageWidth > 0) {
+      const spreadWidth = Math.round(pageWidth * pages.length);
+      surface.style.setProperty('--page-max-width', `${spreadWidth}px`);
+    }
+    if (pageHeight > 0) {
+      surface.style.setProperty('--page-max-height', `${Math.round(pageHeight)}px`);
+    }
+  }
 
   surface.style.setProperty('--page-count', String(pages.length));
 

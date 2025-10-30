@@ -3662,6 +3662,7 @@ function createSlide(pages) {
 
   const surface = document.createElement('div');
   surface.className = 'page-surface';
+  surface.dataset.pageCount = String(pages.length);
   const ratio = state.viewBox && state.viewBox.width && state.viewBox.height
     ? state.viewBox.width / state.viewBox.height
     : 0.75;
@@ -4694,6 +4695,7 @@ function endPan(event) {
   if (isSwipePointer) {
     const isCancel = event.type === 'pointercancel';
     let slideChanged = false;
+    const attemptedSwipe = swipeState.active;
 
     if (swipeState.active && !isCancel) {
       const elapsed = (event.timeStamp || performance.now()) - swipeState.startTime;
@@ -4747,7 +4749,7 @@ function endPan(event) {
     }
 
     if (!slideChanged) {
-      swipeState.isSwipe = false;
+      swipeState.isSwipe = Boolean(attemptedSwipe);
       setSlidesInteractive(false);
       positionSlides(state.currentSlide);
     }
@@ -4760,7 +4762,8 @@ function endPan(event) {
       }
     }
 
-    resetSwipeTracking({ preserveSwipe: slideChanged });
+    const preserveSwipe = slideChanged || attemptedSwipe;
+    resetSwipeTracking({ preserveSwipe });
     panState.active = false;
     panState.pointerId = null;
     panState.surface = null;

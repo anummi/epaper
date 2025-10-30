@@ -411,7 +411,8 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   touch-action: none;
   will-change: transform;
   --page-count: 1;
-  --spread-ratio: calc(var(--page-ratio, 0.75) * var(--page-count, 1));
+  --spread-page-count: var(--page-count, 1);
+  --spread-ratio: calc(var(--page-ratio, 0.75) * var(--spread-page-count));
   width: min(
     calc(100vw - (2 * var(--stage-padding-inline))),
     calc((100vh - (2 * var(--stage-padding-block))) * var(--spread-ratio))
@@ -423,6 +424,17 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   aspect-ratio: var(--spread-ratio);
   max-height: calc(100vh - (2 * var(--stage-padding-block)));
   max-width: calc(100vw - (2 * var(--stage-padding-inline)));
+}
+
+@media (min-width: 900px) {
+  .page-surface[data-page-count="1"] {
+    --spread-page-count: 2;
+  }
+
+  .page-surface[data-page-count="1"] .page-image {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
 }
 
 .page-surface.is-zoomed {

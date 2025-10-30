@@ -1,6 +1,6 @@
 'use strict';
 
-const maxScale = 4;
+const maxScale = 5;
 const minScale = 1;
 const scaleStep = 0.5;
 const articleBaseUrl = 'https://sandbox-devtest2.anygraaf.net/';

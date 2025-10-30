@@ -4783,9 +4783,18 @@ function suppressSwipeClicks(event) {
   if (!swipeState.isSwipe) {
     return;
   }
+  const target = event.target;
+  const allowInteractiveClick = target instanceof Element
+    && target.closest('.maprect, .ad-hotspot, .ad-action, .ad-details__link, a, button, [role="button"], [data-action]');
+
+  swipeState.isSwipe = false;
+
+  if (allowInteractiveClick) {
+    return;
+  }
+
   event.preventDefault();
   event.stopPropagation();
-  swipeState.isSwipe = false;
 }
 
 function resetReadingSwipeTracking(options = {}) {
@@ -5574,67 +5583,76 @@ async function loadArticleContent(articleOrUrl) {
     ? { url: articleOrUrl }
     : (articleOrUrl && typeof articleOrUrl === 'object' ? articleOrUrl : {});
   const articleId = article && article.id != null ? String(article.id) : null;
+  const resolvedArticleUrl = typeof article.url === 'string' && article.url.trim().length > 0
+    ? resolveArticleUrl(article.url)
+    : null;
+
   openReadingWindow();
   readingWindow.scrollTop = 0;
   updateReadingHeading('', false);
   content.innerHTML = `<p>${resolveLabel('articleLoading', 'Ladataan sisältöä…')}</p>`;
 
-  if (articleId) {
+  const tryRenderStoredContent = async () => {
+    if (!articleId) {
+      return false;
+    }
     if (renderStoredArticleContent(articleId)) {
       ensureArticleHeading(article);
-      return;
+      return true;
     }
     const hasLoaded = await ensureArticleContentLoaded();
     if (hasLoaded && renderStoredArticleContent(articleId)) {
       ensureArticleHeading(article);
-      return;
+      return true;
     }
-  }
-
-  if (!article.url) {
-    content.innerHTML = `<p>${resolveLabel('articleError', 'Artikkelin lataaminen epäonnistui.')}</p>`;
-    return;
-  }
+    return false;
+  };
 
   try {
-    const articleUrl = resolveArticleUrl(article.url);
-    const response = await fetch(articleUrl);
-    if (!response.ok) {
-      throw new Error(`Artikkelin lataus epäonnistui: ${response.status}`);
+    if (resolvedArticleUrl) {
+      const response = await fetch(resolvedArticleUrl);
+      if (!response.ok) {
+        throw new Error(`Artikkelin lataus epäonnistui: ${response.status}`);
+      }
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const selector = state.config.articleClass || '.zoomArticle';
+      const articleNode = doc.querySelector(selector) || doc.body;
+      content.innerHTML = articleNode.innerHTML;
+      ensureArticleHeading(article);
+
+      const images = content.querySelectorAll('img');
+      images.forEach(image => {
+        const src = image.getAttribute('src');
+        const dataSrc = image.getAttribute('data-aghref');
+        const resolved = dataSrc || src;
+        if (resolved) {
+          image.src = resolveArticleUrl(resolved);
+        }
+      });
+
+      const links = content.querySelectorAll('a[href]');
+      links.forEach(link => {
+        const href = link.getAttribute('href');
+        if (href) {
+          link.href = resolveArticleUrl(href);
+        }
+      });
+      return;
     }
-    const html = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const selector = state.config.articleClass || '.zoomArticle';
-    const articleNode = doc.querySelector(selector) || doc.body;
-    content.innerHTML = articleNode.innerHTML;
-    ensureArticleHeading(article);
 
-    const images = content.querySelectorAll('img');
-    images.forEach(image => {
-      const src = image.getAttribute('src');
-      const dataSrc = image.getAttribute('data-aghref');
-      const resolved = dataSrc || src;
-      if (resolved) {
-        image.src = resolveArticleUrl(resolved);
-      }
-    });
+    const rendered = await tryRenderStoredContent();
+    if (rendered) {
+      return;
+    }
 
-    const links = content.querySelectorAll('a[href]');
-    links.forEach(link => {
-      const href = link.getAttribute('href');
-      if (href) {
-        link.href = resolveArticleUrl(href);
-      }
-    });
+    throw new Error('Artikkelille ei löytynyt lähdeosoitetta.');
   } catch (error) {
     console.error('Artikkelin lataaminen epäonnistui:', error);
-    if (articleId) {
-      const hasLoaded = await ensureArticleContentLoaded();
-      if (hasLoaded && renderStoredArticleContent(articleId)) {
-        ensureArticleHeading(article);
-        return;
-      }
+    const rendered = await tryRenderStoredContent();
+    if (rendered) {
+      return;
     }
     content.innerHTML = `<p>${resolveLabel('articleError', 'Artikkelin lataaminen epäonnistui.')}</p>`;
     ensureArticleHeading(article);

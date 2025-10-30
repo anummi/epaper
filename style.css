@@ -380,7 +380,7 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   height: 100%;
   display: flex;
   align-items: stretch;
-  transition: transform var(--transition-medium, 260ms) ease;
+  transition: transform var(--transition-fast, 200ms) ease-out;
   will-change: transform;
 }
 
@@ -904,25 +904,14 @@ body.theme-dark .archive-notice__action:focus-visible {
 }
 
 .zoom-menu__page-label {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted-text, var(--text));
   white-space: nowrap;
-}
-
-body.is-zoomed .zoom-menu__page-label {
-  display: none;
-}
-
-.zoom-menu.is-persistent .zoom-menu__page-label {
-  display: inline-flex;
-  align-items: center;
-}
-
-body.is-zoomed .zoom-menu.is-persistent .zoom-menu__page-label {
-  display: none;
 }
 
 body.ui-controls-hidden .zoom-menu.is-visible {
@@ -1042,18 +1031,21 @@ body.theme-dark .print-panel__dialog {
 }
 
 .print-panel__header {
+  position: relative;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  justify-content: flex-start;
   gap: 1rem;
   flex-wrap: wrap;
+  padding-right: 3rem;
 }
 
 .print-panel__heading {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
 }
 
 .print-panel__title {
@@ -1070,6 +1062,7 @@ body.theme-dark .print-panel__dialog {
   font-weight: 600;
   cursor: pointer;
   transition: background var(--transition), color var(--transition), transform var(--transition);
+  align-self: flex-start;
 }
 
 .print-panel__select-all:hover,
@@ -1085,6 +1078,9 @@ body.theme-dark .print-panel__select-all {
 }
 
 .print-panel__close {
+  position: absolute;
+  top: 0;
+  right: 0;
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 50%;
@@ -1325,29 +1321,32 @@ body.theme-dark .print-panel__action {
 
 .all-pages__grid {
   --preview-height: 220px;
+  --preview-gap: 1rem;
   flex: 1 1 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 1rem;
+  gap: var(--preview-gap);
   overflow-y: auto;
   padding-bottom: 1rem;
 }
-.all-pages__grid button.all-pages__page:not(.all-pages__page--spread) {
-    width: calc(var(--preview-width) * 2);
+.all-pages__grid button:first-child {
+  margin-inline-start: max(calc(var(--preview-width, 220px) / 2 - var(--preview-gap) * 0.5), 0px);
 }
 
-.all-pages__grid button:first-child > div{
-    display: flex;
-    justify-content: flex-end;
+.all-pages__grid button:first-child > div {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .all-pages__grid button:first-child > div img {
-    border-radius: 0.5rem;
+  border-radius: 0.5rem;
 }
 
-.all-pages__grid button:last-child:not(.all-pages__page--spread) {
-    width: var(--preview-width);
+@media (max-width: 680px) {
+  .all-pages__grid button:first-child {
+    margin-inline-start: 0;
+  }
 }
 
 .all-pages__page {
@@ -1357,9 +1356,9 @@ body.theme-dark .print-panel__action {
   margin: 0;
   border-radius: 0.75rem;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.85);
-  border: 3px solid transparent;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  border: 2px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.2);
   cursor: pointer;
   transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition), background var(--transition);
   width: var(--preview-width, 220px);
@@ -1395,7 +1394,7 @@ body.theme-dark .print-panel__action {
 .all-pages__page:hover,
 .all-pages__page:focus-visible {
   transform: translateY(-4px);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.26);
 }
 
 .all-pages__page.is-active span {
@@ -1409,9 +1408,9 @@ body.theme-dark .print-panel__action {
 }
 
 body.theme-dark .all-pages__page {
-  background: rgba(15, 23, 42, 0.85);
-  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.45);
-  border: 3px solid transparent;
+  background: rgba(15, 23, 42, 0.88);
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.5);
+  border: 2px solid rgba(148, 163, 184, 0.2);
 }
 
 body.theme-dark .all-pages__page:hover,

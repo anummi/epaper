@@ -12,6 +12,7 @@ window.epaperConfig = {
     archiveYearSummary: { fi: '{year} ({count})', en: '{year} ({count})' },
     archiveMonthSummary: { fi: '{month} ({count})', en: '{month} ({count})' },
     archiveUnknownDate: { fi: 'Tuntematon ajankohta', en: 'Unknown date' },
+    archiveNoticeCurrentIssue: { fi: 'Arkiston numero', en: 'Archive issue' },
     archiveNoticeLabel: { fi: 'Arkiston numero', en: 'Archive issue' },
     archiveNoticeAction: { fi: 'Palaa uusimpaan numeroon', en: 'Return to latest issue' },
     zoomReset: { fi: 'Palauta', en: 'Reset view' },

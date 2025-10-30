@@ -772,6 +772,7 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
   -webkit-backdrop-filter: blur(8px);
   line-height: 1.2;
   text-align: center;
+  white-space: nowrap;
 }
 
 .archive-notice__action {
@@ -2796,6 +2797,10 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
   }
 
   body.mobile-menu-open .mobile-menu-button {
+    display: none;
+  }
+
+  body.mobile-menu-animating .mobile-menu-button {
     display: none;
   }
 

@@ -861,11 +861,13 @@ function buildLayout() {
   archiveNotice.hidden = true;
   archiveNotice.setAttribute('aria-hidden', 'true');
   const archiveNoticeLabel = document.createElement('span');
-  archiveNoticeLabel.className = 'archive-notice__label';
+  archiveNoticeLabel.className = 'archive-notice__label visually-hidden';
+  archiveNoticeLabel.id = 'archive-notice-label';
   archiveNotice.appendChild(archiveNoticeLabel);
   const archiveNoticeAction = document.createElement('button');
   archiveNoticeAction.type = 'button';
   archiveNoticeAction.className = 'archive-notice__action';
+  archiveNoticeAction.setAttribute('aria-describedby', archiveNoticeLabel.id);
   archiveNotice.appendChild(archiveNoticeAction);
   shell.appendChild(archiveNotice);
 

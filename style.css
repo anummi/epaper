@@ -2833,8 +2833,7 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
     box-shadow: 24px 0 45px rgba(15, 23, 42, 0.22);
   }
 
-  body.mobile-menu-open .menu-item.menu-open,
-  body.mobile-menu-animating .menu-item.menu-open {
+  body .menu-item.menu-open{
     display: none;
   }
 

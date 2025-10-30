@@ -82,7 +82,8 @@ const state = {
   ui: {
     idleTimer: null,
     lastActivity: 0,
-    isHidden: false
+    isHidden: false,
+    mobileMenuOpen: false
   },
   dom: {}
 };
@@ -2031,7 +2032,7 @@ function shouldHideMobileMenuButton() {
   if (window.innerWidth >= 900) {
     return false;
   }
-  if (document.body.classList.contains('mobile-menu-open')) {
+  if (state.ui.mobileMenuOpen) {
     return true;
   }
   if (
@@ -2073,7 +2074,10 @@ function updateMobileMenuButtonVisibility() {
 function refreshMobileMenuAccessibility() {
   const { menuBar, mobileMenuBackdrop, mobileMenuButton } = state.dom || {};
   const isSmallViewport = window.innerWidth < 900;
-  const isOpen = document.body.classList.contains('mobile-menu-open');
+  const isOpen = state.ui.mobileMenuOpen && isSmallViewport;
+  if (!isSmallViewport && document.body.classList.contains('mobile-menu-open')) {
+    document.body.classList.remove('mobile-menu-open');
+  }
   if (menuBar) {
     menuBar.setAttribute('aria-hidden', isSmallViewport && !isOpen ? 'true' : 'false');
   }
@@ -2088,12 +2092,14 @@ function refreshMobileMenuAccessibility() {
 
 function openMobileMenu() {
   if (window.innerWidth >= 900) {
+    state.ui.mobileMenuOpen = false;
     refreshMobileMenuAccessibility();
     return;
   }
-  if (document.body.classList.contains('mobile-menu-open')) {
+  if (state.ui.mobileMenuOpen) {
     return;
   }
+  state.ui.mobileMenuOpen = true;
   document.body.classList.add('mobile-menu-open');
   refreshMobileMenuAccessibility();
   positionZoomMenu();
@@ -2104,25 +2110,26 @@ function openMobileMenu() {
 }
 
 function closeMobileMenu(options = {}) {
-  if (!document.body.classList.contains('mobile-menu-open')) {
-    refreshMobileMenuAccessibility();
-    return;
-  }
+  const wasOpen = state.ui.mobileMenuOpen || document.body.classList.contains('mobile-menu-open');
+  state.ui.mobileMenuOpen = false;
   document.body.classList.remove('mobile-menu-open');
   refreshMobileMenuAccessibility();
   positionZoomMenu();
-  const focusTrigger = Boolean(options.focusTrigger);
-  if (focusTrigger && state.dom?.mobileMenuButton instanceof HTMLElement) {
-    state.dom.mobileMenuButton.focus({ preventScroll: true });
+  if (wasOpen) {
+    const focusTrigger = Boolean(options.focusTrigger);
+    if (focusTrigger && state.dom?.mobileMenuButton instanceof HTMLElement) {
+      state.dom.mobileMenuButton.focus({ preventScroll: true });
+    }
   }
 }
 
 function toggleMobileMenu() {
-  if (document.body.classList.contains('mobile-menu-open')) {
+  registerUserActivity();
+  if (state.ui.mobileMenuOpen) {
     closeMobileMenu();
-  } else {
-    openMobileMenu();
+    return;
   }
+  openMobileMenu();
 }
 
 function handleLanguageChange(event) {
@@ -2163,7 +2170,7 @@ function handleKeydown(event) {
       resetZoom();
       return;
     }
-    if (document.body.classList.contains('mobile-menu-open')) {
+    if (state.ui.mobileMenuOpen) {
       closeMobileMenu({ focusTrigger: true });
       return;
     }
@@ -2591,7 +2598,7 @@ function handleResize() {
   state.resizeTimer = setTimeout(() => {
     const newOrientation = window.innerWidth > window.innerHeight ? 'landscape' : 'portrait';
     const isCompact = window.innerWidth < 900;
-    if (window.innerWidth >= 900 && document.body.classList.contains('mobile-menu-open')) {
+    if (window.innerWidth >= 900 && state.ui.mobileMenuOpen) {
       closeMobileMenu();
     }
     if (newOrientation !== state.orientation || isCompact !== state.isCompact) {

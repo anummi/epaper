@@ -75,7 +75,6 @@ body {
   --menu-translate: 0%;
   --shell-padding-left: var(--menu-collapsed-width);
   --controls-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1.5rem, 4vh, 2.25rem));
-  --zoom-menu-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1.5rem, 4vh, 2.25rem));
   display: flex;
   justify-content: flex-start;
   align-items: stretch;
@@ -91,7 +90,6 @@ body.is-zoomed {
   --menu-translate: -100%;
   --shell-padding-left: 0px;
   --controls-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1rem, 3.5vh, 1.5rem));
-  --zoom-menu-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1.5rem, 4vh, 2.25rem));
 }
 
 body.print-open {
@@ -224,7 +222,7 @@ body:not(.menu-collapsed) .menu-bar {
 body.theme-dark .mobile-menu-button {
   background: rgba(17, 24, 39, 0.92);
   color: var(--surface-strong);
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 2px solid rgba(148, 163, 184, 0.35);
   box-shadow: 0 18px 40px rgba(2, 6, 23, 0.55);
 }
 
@@ -739,7 +737,7 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
 
 .zoom-menu {
   position: fixed;
-  bottom: var(--zoom-menu-offset, var(--controls-offset));
+  bottom: var(--controls-offset);
   left: 50%;
   transform: translate(-50%, 0);
   display: flex;
@@ -929,7 +927,7 @@ body.reading-open .zoom-menu {
 }
 
 body.theme-dark .zoom-menu {
-  background: rgba(17, 24, 39, 0.9);
+  background: rgb(20 27 43 / 90%);
   box-shadow: 0 12px 35px rgba(2, 6, 23, 0.6);
 }
 
@@ -1413,7 +1411,7 @@ body.theme-dark .print-panel__action {
 body.theme-dark .all-pages__page {
   background: rgba(15, 23, 42, 0.88);
   box-shadow: 0 12px 30px rgba(2, 6, 23, 0.5);
-  border: 2px solid rgba(148, 163, 184, 0.2);
+  border: 3px solid rgba(148, 163, 184, 0.2);
 }
 
 body.theme-dark .all-pages__page:hover,
@@ -1423,8 +1421,8 @@ body.theme-dark .all-pages__page:focus-visible {
 
 body.theme-dark .all-pages__page.is-active {
   background: rgba(96, 165, 250, 0.15);
-  border-color: rgba(96, 165, 250, 0.55);
-  box-shadow: 0 18px 40px rgba(96, 165, 250, 0.24);
+  border-color: rgb(96 165 250);
+  box-shadow: 0 5px 20px rgba(96, 165, 250, 0.24);
 }
 
 .reading-backdrop {
@@ -2346,7 +2344,7 @@ body.is-zoomed .menu-bar {
 }
 
 body.is-zoomed .zoom-menu {
-  bottom: var(--zoom-menu-offset, var(--controls-offset));
+  bottom: var(--controls-offset);
 }
 
 .archive-panel {
@@ -2905,7 +2903,7 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
   }
 
   .zoom-menu {
-    bottom: var(--zoom-menu-offset, var(--controls-offset));
+    bottom: var(--controls-offset);
   }
 }
 

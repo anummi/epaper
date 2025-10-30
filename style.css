@@ -986,7 +986,9 @@ body.theme-dark .zoom-button {
 
 body.theme-dark .zoom-button:hover:not(:disabled),
 body.theme-dark .zoom-button:focus-visible:not(:disabled) {
-  color: #0b1120;
+    background: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
 }
 
 .all-pages {

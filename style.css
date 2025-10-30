@@ -1357,7 +1357,7 @@ body.theme-dark .print-panel__action {
   padding-bottom: 1rem;
 }
 .all-pages__grid button:first-child {
-  margin-inline-start: max(calc(var(--preview-width, 220px) / 2 - var(--preview-gap) * 0.5), 0px);
+  margin-inline-start: var(--preview-width);
 }
 
 .all-pages__grid button:first-child > div {

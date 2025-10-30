@@ -75,6 +75,7 @@ body {
   --menu-translate: 0%;
   --shell-padding-left: var(--menu-collapsed-width);
   --controls-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1.5rem, 4vh, 2.25rem));
+  --zoom-menu-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1.5rem, 4vh, 2.25rem));
   display: flex;
   justify-content: flex-start;
   align-items: stretch;
@@ -90,6 +91,7 @@ body.is-zoomed {
   --menu-translate: -100%;
   --shell-padding-left: 0px;
   --controls-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1rem, 3.5vh, 1.5rem));
+  --zoom-menu-offset: calc(env(safe-area-inset-bottom, 0px) + clamp(1.5rem, 4vh, 2.25rem));
 }
 
 body.print-open {
@@ -737,7 +739,7 @@ body.theme-dark .nav-button:focus-visible:not(:disabled) {
 
 .zoom-menu {
   position: fixed;
-  bottom: var(--controls-offset);
+  bottom: var(--zoom-menu-offset, var(--controls-offset));
   left: 50%;
   transform: translate(-50%, 0);
   display: flex;
@@ -2344,7 +2346,7 @@ body.is-zoomed .menu-bar {
 }
 
 body.is-zoomed .zoom-menu {
-  bottom: var(--controls-offset);
+  bottom: var(--zoom-menu-offset, var(--controls-offset));
 }
 
 .archive-panel {
@@ -2903,7 +2905,7 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
   }
 
   .zoom-menu {
-    bottom: var(--controls-offset);
+    bottom: var(--zoom-menu-offset, var(--controls-offset));
   }
 }
 

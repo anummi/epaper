@@ -15,6 +15,7 @@ window.epaperConfig = {
     archiveUnknownDate: { fi: 'Tuntematon ajankohta', en: 'Unknown date' },
     archiveNoticeLabel: { fi: 'Arkiston numero', en: 'Archive issue' },
     archiveNoticeAction: { fi: 'Palaa uusimpaan numeroon', en: 'Return to latest issue' },
+    archiveNoticeClose: { fi: 'Sulje', en: 'Close' },
     zoomReset: { fi: 'Palauta', en: 'Reset view' },
     readingTitle: { fi: 'Artikkeli', en: 'Article' },
     settingsTitle: { fi: 'Asetukset', en: 'Settings' },

@@ -1670,6 +1670,11 @@ body.theme-dark .reading-backdrop {
   gap: 0.5rem;
 }
 
+.ad-action__label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
 .ad-details__link {
   display: inline-flex;
   text-decoration: none;
@@ -1678,6 +1683,23 @@ body.theme-dark .reading-backdrop {
 .ad-details__link:not(.ad-action) {
   color: var(--accent);
   font-weight: 500;
+}
+
+.ad-details__link.ad-action {
+  padding-inline: 0.85rem 1rem;
+}
+
+body.theme-dark .ad-details__link.ad-action {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(148, 163, 184, 0.28);
+  color: var(--surface-strong);
+}
+
+body.theme-dark .ad-details__link.ad-action:hover,
+body.theme-dark .ad-details__link.ad-action:focus-visible {
+  background: rgba(30, 41, 59, 0.78);
+  border-color: rgba(96, 165, 250, 0.45);
+  color: var(--surface-strong);
 }
 
 .ad-details__link:hover,
@@ -2540,8 +2562,8 @@ body.theme-dark .archive-panel__month {
 
 body.theme-dark .archive-panel__year[open],
 body.theme-dark .archive-panel__month[open] {
-  background: rgba(96, 165, 250, 0.16);
-  border-color: rgba(96, 165, 250, 0.4);
+  background: rgba(96, 165, 250, 0.12);
+  border-color: rgba(148, 163, 184, 0.32);
 }
 
 .archive-panel__year-summary,
@@ -2584,7 +2606,7 @@ body.theme-dark .archive-panel__month[open] {
 }
 
 body.theme-dark .archive-panel__month-list .archive-panel__month {
-  background: rgba(30, 41, 59, 0.35);
+  background: rgba(30, 41, 59, 0.4);
 }
 
 .archive-panel__empty {
@@ -2617,13 +2639,15 @@ body.theme-dark .archive-panel__month-list .archive-panel__month {
 }
 
 body.theme-dark .archive-panel__item {
-  background: rgba(15, 23, 42, 0.85);
-  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.45);
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.2);
+  box-shadow: 0 16px 36px rgba(2, 6, 23, 0.52);
 }
 
 body.theme-dark .archive-panel__item:hover,
 body.theme-dark .archive-panel__item:focus-visible {
-  box-shadow: 0 20px 48px rgba(2, 6, 23, 0.6);
+  background: rgba(30, 41, 59, 0.78);
+  box-shadow: 0 22px 52px rgba(2, 6, 23, 0.58);
 }
 
 .archive-panel__item.is-active {
@@ -2633,8 +2657,8 @@ body.theme-dark .archive-panel__item:focus-visible {
 }
 
 body.theme-dark .archive-panel__item.is-active {
-  border-color: rgba(96, 165, 250, 0.65);
-  background: rgba(96, 165, 250, 0.14);
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(96, 165, 250, 0.18);
 }
 
 .archive-panel__media {

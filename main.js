@@ -3877,9 +3877,6 @@ function positionSlides(activeIndex, { immediate = false } = {}) {
   }
 
   slider.style.transform = `translate3d(${-activeIndex * 100}%, 0, 0)`;
-  if (!dragging && slider.dataset.mobileGap) {
-    delete slider.dataset.mobileGap;
-  }
 
   if (immediate) {
     requestAnimationFrame(() => {
@@ -3920,32 +3917,6 @@ function updateSlideProgress(progress) {
   if (slider) {
     const offset = -(state.currentSlide + clamped) * 100;
     slider.style.transform = `translate3d(${offset}%, 0, 0)`;
-    if (state.isCompact && Math.abs(clamped) > 0.01) {
-      const direction = clamped > 0 ? 1 : -1;
-      const targetIndex = state.currentSlide + direction;
-      const targetSlide = state.slides?.[targetIndex];
-      const targetPages = Array.isArray(targetSlide?.pages) ? targetSlide.pages : null;
-      if (targetPages && targetPages.length) {
-        const gapPageIndex = direction > 0
-          ? targetPages[0]
-          : targetPages[targetPages.length - 1];
-        if (Number.isInteger(gapPageIndex)) {
-          const pageNumber = gapPageIndex + 1;
-          const shouldGap = direction > 0 ? pageNumber % 2 === 0 : pageNumber % 2 === 1;
-          if (shouldGap) {
-            slider.dataset.mobileGap = direction > 0 ? 'forward' : 'backward';
-          } else {
-            delete slider.dataset.mobileGap;
-          }
-        } else {
-          delete slider.dataset.mobileGap;
-        }
-      } else {
-        delete slider.dataset.mobileGap;
-      }
-    } else if (slider.dataset.mobileGap) {
-      delete slider.dataset.mobileGap;
-    }
   }
 
   slides.forEach((slide, slideIndex) => {
@@ -3956,13 +3927,6 @@ function updateSlideProgress(progress) {
       || (clamped < 0 && slideIndex === state.currentSlide - 1);
     slide.element.classList.toggle('is-peek', isPeek);
   });
-
-  if (state.isCompact && state.zoom.scale > 1) {
-    const surface = getActiveSurface();
-    if (surface) {
-      applyZoom(surface);
-    }
-  }
 }
 
 function resetSlideProgress() {
@@ -3977,10 +3941,7 @@ function updateSlideLayout() {
 }
 
 function buildSlideDefinitions({ orientation, isCompact }) {
-  if (isCompact) {
-    return buildSpreadDefinitions();
-  }
-  if (orientation === 'portrait') {
+  if (isCompact || orientation === 'portrait') {
     return state.imagePaths.map((_, index) => [index]);
   }
   return buildSpreadDefinitions();
@@ -4577,92 +4538,6 @@ function getActiveSurface() {
   return current ? current.surface : null;
 }
 
-function getSlideIndexBySurface(surface) {
-  if (!(surface instanceof Element)) {
-    return -1;
-  }
-  const slides = state.slides || [];
-  return slides.findIndex(slide => slide?.surface === surface);
-}
-
-function getSlideByPageIndex(pageIndex) {
-  if (!Number.isInteger(pageIndex) || pageIndex < 0) {
-    return null;
-  }
-  const slides = state.slides || [];
-  return slides.find(slide => Array.isArray(slide?.pages) && slide.pages.includes(pageIndex)) || null;
-}
-
-function getPairedPageIndex(pageIndex) {
-  if (!Number.isInteger(pageIndex) || pageIndex < 0) {
-    return null;
-  }
-  const total = Array.isArray(state.imagePaths) ? state.imagePaths.length : 0;
-  if (total < 3) {
-    return null;
-  }
-  const pageNumber = pageIndex + 1;
-  if (pageNumber <= 1 || pageNumber >= total) {
-    return null;
-  }
-  if (pageNumber % 2 === 0) {
-    const next = pageIndex + 1;
-    return next < total ? next : null;
-  }
-  const previous = pageIndex - 1;
-  return previous >= 0 ? previous : null;
-}
-
-function getLinkedZoomSurfaces(targetSurface) {
-  if (!state.isCompact || !(targetSurface instanceof Element)) {
-    return [];
-  }
-  const slides = state.slides || [];
-  const targetSlideIndex = getSlideIndexBySurface(targetSurface);
-  if (targetSlideIndex === -1) {
-    return [];
-  }
-  const targetSlide = slides[targetSlideIndex];
-  if (!Array.isArray(targetSlide?.pages) || !targetSlide.pages.length) {
-    return [];
-  }
-  const pageIndex = targetSlide.pages[0];
-  const pairedPageIndex = getPairedPageIndex(pageIndex);
-  if (!Number.isInteger(pairedPageIndex)) {
-    return [];
-  }
-  const pairedSlide = getSlideByPageIndex(pairedPageIndex);
-  if (!pairedSlide?.surface || pairedSlide.surface === targetSurface) {
-    return [];
-  }
-  return [pairedSlide.surface];
-}
-
-function shouldPreserveZoomBetweenSlides(targetIndex) {
-  if (!state.isCompact || state.zoom.scale <= 1) {
-    return false;
-  }
-  if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= state.slides.length) {
-    return false;
-  }
-  if (Math.abs(targetIndex - state.currentSlide) !== 1) {
-    return false;
-  }
-  const slides = state.slides || [];
-  const current = slides[state.currentSlide];
-  const target = slides[targetIndex];
-  if (!Array.isArray(current?.pages) || !current.pages.length || !Array.isArray(target?.pages) || !target.pages.length) {
-    return false;
-  }
-  const currentPageIndex = current.pages[0];
-  const pairedPageIndex = getPairedPageIndex(currentPageIndex);
-  if (!Number.isInteger(pairedPageIndex)) {
-    return false;
-  }
-  const pairedSlide = getSlideByPageIndex(pairedPageIndex);
-  return Boolean(pairedSlide && pairedSlide === target);
-}
-
 function resetZoom(options = {}) {
   const { targetSurface = null, additionalSurfaces = [] } = options;
   stopPanMomentum();
@@ -4783,26 +4658,19 @@ function applyZoom(surface) {
     const target = pendingZoomSurface && pendingZoomSurface.isConnected
       ? pendingZoomSurface
       : getActiveSurface();
+	  
     pendingZoomSurface = null;
     const isZoomed = state.zoom.scale > 1;
-    const surfaces = target ? [target, ...getLinkedZoomSurfaces(target)] : [];
-    if (target && !surfaces.includes(target)) {
-      surfaces.unshift(target);
-    }
-    if (target && isZoomed) {
-      const constrained = constrainTranslation(target, state.zoom.translateX, state.zoom.translateY, state.zoom.scale);
-      state.zoom.translateX = constrained.x;
-      state.zoom.translateY = constrained.y;
-    }
-    surfaces.forEach(element => {
-      updateSurfaceDimensions(element, state.zoom.scale);
+	
+    if (target) {
+      updateSurfaceDimensions(target, state.zoom.scale);
       if (!isZoomed) {
-        element.style.transform = 'translate3d(0px, 0px, 0px)';
+        target.style.transform = 'translate3d(0px, 0px, 0px)';
       } else {
-        element.style.transform = `translate3d(${state.zoom.translateX}px, ${state.zoom.translateY}px, 0px)`;
+        target.style.transform = `translate3d(${state.zoom.translateX}px, ${state.zoom.translateY}px, 0px)`;
       }
-      element.classList.toggle('is-zoomed', isZoomed);
-    });
+      target.classList.toggle('is-zoomed', isZoomed);
+    }
     document.body.classList.toggle('is-zoomed', isZoomed);
     const persistent = shouldKeepZoomMenuVisible();
     const zoomMenu = state.dom?.zoomMenu || document.querySelector('.zoom-menu');
@@ -5307,14 +5175,7 @@ function endPan(event) {
           const targetIndex = state.currentSlide + direction;
           if (targetIndex >= 0 && targetIndex < state.slides.length) {
             setSlidesInteractive(false);
-            const preserveZoom = shouldPreserveZoomBetweenSlides(targetIndex);
-            gotoSlide(targetIndex, { preserveZoom });
-            if (preserveZoom) {
-              const surface = getActiveSurface();
-              if (surface) {
-                applyZoom(surface);
-              }
-            }
+            gotoSlide(targetIndex);
             swipeState.isSwipe = true;
             slideChanged = true;
           }

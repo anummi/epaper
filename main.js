@@ -62,7 +62,8 @@ const state = {
   settings: {
     language: 'fi',
     darkMode: false,
-    persistentZoomControls: false
+    persistentZoomControls: false,
+    allowZoomClicks: false
   },
   audio: {
     queue: [],
@@ -157,6 +158,26 @@ const PAN_MOMENTUM_MIN_VELOCITY = 0.02;
 const PAN_MOMENTUM_DECELERATION = 0.0032;
 const PAN_SWIPE_OVERFLOW_THRESHOLD = 60;
 const ZOOM_OVERFLOW_SWIPE_PROGRESS_THRESHOLD = 0.45;
+
+function readBoolean(value, defaultValue = false) {
+  if (value == null) {
+    return defaultValue;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      return defaultValue;
+    }
+    if (['true', '1', 'yes', 'on'].includes(normalized)) {
+      return true;
+    }
+    if (['false', '0', 'no', 'off'].includes(normalized)) {
+      return false;
+    }
+    return defaultValue;
+  }
+  return Boolean(value);
+}
 
 function stopPanMomentum() {
   if (panMomentum.frame !== null) {
@@ -359,26 +380,15 @@ function getAdConfig() {
 
 function areAdHoverActionsEnabled() {
   const value = getAdConfig().hoverActionsEnabled;
-  if (value == null) {
-    return true;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    return normalized !== 'false' && normalized !== '0' && normalized !== 'no';
-  }
-  return Boolean(value);
+  return readBoolean(value, true);
 }
 
 function shouldAllowAdClicksWhenZoomed() {
-  const value = getAdConfig().allowClicksWhenZoomed;
-  if (value == null) {
+  if (!shouldAllowZoomClicks()) {
     return false;
   }
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    return normalized === 'true' || normalized === '1' || normalized === 'yes';
-  }
-  return Boolean(value);
+  const value = getAdConfig().allowClicksWhenZoomed;
+  return readBoolean(value, true);
 }
 
 function getZoomPanelConfig() {
@@ -387,26 +397,34 @@ function getZoomPanelConfig() {
 
 function isZoomPanelSettingVisible() {
   const value = getZoomPanelConfig().showSetting;
-  if (value == null) {
-    return true;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    return normalized !== 'false' && normalized !== '0' && normalized !== 'no';
-  }
-  return Boolean(value);
+  return readBoolean(value, true);
 }
 
 function getDefaultPersistentZoomControls() {
   const value = getZoomPanelConfig().persistent;
-  if (value == null) {
-    return false;
+  return readBoolean(value, false);
+}
+
+function getZoomClickConfig() {
+  return state.config?.zoomClicks || {};
+}
+
+function isZoomClickSettingVisible() {
+  const value = getZoomClickConfig().showSetting;
+  return readBoolean(value, false);
+}
+
+function getDefaultAllowZoomClicks() {
+  const configValue = getZoomClickConfig().defaultEnabled;
+  if (configValue != null) {
+    return readBoolean(configValue, false);
   }
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    return normalized === 'true' || normalized === '1' || normalized === 'yes';
-  }
-  return Boolean(value);
+  const fallback = getAdConfig().allowClicksWhenZoomed;
+  return readBoolean(fallback, false);
+}
+
+function shouldAllowZoomClicks() {
+  return Boolean(state.settings?.allowZoomClicks);
 }
 
 function shouldKeepZoomMenuVisible() {
@@ -631,6 +649,7 @@ function createAdActionElement({ key, href = null, target = '_self', rel = null,
     element.type = 'button';
   }
   element.classList.add('ad-action');
+  element.classList.add('glass-btn');
   element.dataset.actionKey = key;
   if (className) {
     element.classList.add(className);
@@ -779,8 +798,10 @@ function createAdActionsContainer(adId, ad) {
 }
 
 function applyAdPreferences() {
-  const allowZoomClicks = shouldAllowAdClicksWhenZoomed();
-  document.body.classList.toggle('ads-clickable-when-zoomed', allowZoomClicks);
+  const allowZoomClicks = shouldAllowZoomClicks();
+  const allowZoomAdClicks = shouldAllowAdClicksWhenZoomed();
+  document.body.classList.toggle('zoom-clicks-enabled', allowZoomClicks);
+  document.body.classList.toggle('ads-clickable-when-zoomed', allowZoomAdClicks);
   document.body.classList.toggle('ads-hover-disabled', !areAdHoverActionsEnabled());
 }
 
@@ -847,7 +868,8 @@ function saveSettings() {
     const payload = {
       language: state.settings.language,
       darkMode: state.settings.darkMode,
-      persistentZoomControls: Boolean(state.settings.persistentZoomControls)
+      persistentZoomControls: Boolean(state.settings.persistentZoomControls),
+      allowZoomClicks: Boolean(state.settings.allowZoomClicks)
     };
     window.localStorage?.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
@@ -878,7 +900,7 @@ function buildLayout() {
 
   const mobileMenuClose = document.createElement('button');
   mobileMenuClose.type = 'button';
-  mobileMenuClose.className = 'mobile-menu-close';
+  mobileMenuClose.className = 'mobile-menu-close glass-btn';
   const mobileMenuCloseIcon = createCloseIconElement();
   if (mobileMenuCloseIcon) {
     mobileMenuClose.appendChild(mobileMenuCloseIcon);
@@ -893,7 +915,7 @@ function buildLayout() {
 
   const navPrev = document.createElement('button');
   navPrev.type = 'button';
-  navPrev.className = 'nav-button nav-prev';
+  navPrev.className = 'nav-button nav-prev glass-btn';
   stage.appendChild(navPrev);
   const navPrevIcon = createIconElement(getInterfaceIconDefinition('arrowLeft'));
   if (navPrevIcon) {
@@ -910,7 +932,7 @@ function buildLayout() {
 
   const navNext = document.createElement('button');
   navNext.type = 'button';
-  navNext.className = 'nav-button nav-next';
+  navNext.className = 'nav-button nav-next glass-btn';
   stage.appendChild(navNext);
   const navNextIcon = createIconElement(getInterfaceIconDefinition('arrowLeft'));
   if (navNextIcon) {
@@ -932,12 +954,12 @@ function buildLayout() {
   zoomMenu.setAttribute('aria-hidden', 'true');
   const zoomOut = document.createElement('button');
   zoomOut.type = 'button';
-  zoomOut.className = 'zoom-button zoom-out';
+  zoomOut.className = 'zoom-button zoom-out glass-btn';
   zoomOut.textContent = '−';
   zoomMenu.appendChild(zoomOut);
   const zoomIn = document.createElement('button');
   zoomIn.type = 'button';
-  zoomIn.className = 'zoom-button zoom-in';
+  zoomIn.className = 'zoom-button zoom-in glass-btn';
   zoomIn.textContent = '+';
   zoomMenu.appendChild(zoomIn);
   const zoomPageLabel = document.createElement('span');
@@ -963,7 +985,7 @@ function buildLayout() {
   archiveNotice.appendChild(archiveNoticeLabel);
   const archiveNoticeAction = document.createElement('button');
   archiveNoticeAction.type = 'button';
-  archiveNoticeAction.className = 'archive-notice__action';
+  archiveNoticeAction.className = 'archive-notice__action glass-btn';
   archiveNoticeAction.setAttribute('aria-describedby', archiveNoticeLabel.id);
   const archiveNoticeActionLabel = document.createElement('span');
   archiveNoticeActionLabel.className = 'archive-notice__action-label';
@@ -983,7 +1005,7 @@ function buildLayout() {
 
   const mobileMenuButton = document.createElement('button');
   mobileMenuButton.type = 'button';
-  mobileMenuButton.className = 'mobile-menu-button';
+  mobileMenuButton.className = 'mobile-menu-button glass-btn';
   mobileMenuButton.setAttribute('aria-controls', 'main-menu');
   mobileMenuButton.setAttribute('aria-expanded', 'false');
   const mobileMenuIcon = document.createElement('span');
@@ -1006,7 +1028,7 @@ function buildLayout() {
   allPagesHeader.appendChild(allPagesTitle);
   const allPagesClose = document.createElement('button');
   allPagesClose.type = 'button';
-  allPagesClose.className = 'all-pages__close';
+  allPagesClose.className = 'all-pages__close glass-btn';
   const allPagesCloseIcon = createCloseIconElement();
   if (allPagesCloseIcon) {
     allPagesClose.appendChild(allPagesCloseIcon);
@@ -1034,11 +1056,11 @@ function buildLayout() {
   printHeadingGroup.appendChild(printTitle);
   const printSelectAll = document.createElement('button');
   printSelectAll.type = 'button';
-  printSelectAll.className = 'print-panel__select-all';
+  printSelectAll.className = 'print-panel__select-all glass-btn';
   printHeadingGroup.appendChild(printSelectAll);
   const printClose = document.createElement('button');
   printClose.type = 'button';
-  printClose.className = 'print-panel__close';
+  printClose.className = 'print-panel__close glass-btn';
   const printCloseIcon = createCloseIconElement();
   if (printCloseIcon) {
     printClose.appendChild(printCloseIcon);
@@ -1055,7 +1077,7 @@ function buildLayout() {
   printSelectionInfo.className = 'print-panel__selection-info';
   const printButton = document.createElement('button');
   printButton.type = 'button';
-  printButton.className = 'print-panel__action';
+  printButton.className = 'print-panel__action glass-btn';
   printFooter.appendChild(printSelectionInfo);
   printFooter.appendChild(printButton);
   printDialog.appendChild(printHeader);
@@ -1078,7 +1100,7 @@ function buildLayout() {
   archiveTitle.className = 'archive-panel__title';
   const archiveClose = document.createElement('button');
   archiveClose.type = 'button';
-  archiveClose.className = 'archive-panel__close';
+  archiveClose.className = 'archive-panel__close glass-btn';
   const archiveCloseIcon = createCloseIconElement();
   if (archiveCloseIcon) {
     archiveClose.appendChild(archiveCloseIcon);
@@ -1116,7 +1138,7 @@ function buildLayout() {
 
   const readingPrev = document.createElement('button');
   readingPrev.type = 'button';
-  readingPrev.className = 'reading-window__nav-button reading-window__nav-button--prev';
+  readingPrev.className = 'reading-window__nav-button reading-window__nav-button--prev glass-btn';
   const readingPrevIcon = createIconElement(getInterfaceIconDefinition('arrowLeft'));
   if (readingPrevIcon) {
     readingPrevIcon.classList.add('reading-window__nav-button-icon');
@@ -1131,7 +1153,7 @@ function buildLayout() {
 
   const readingNext = document.createElement('button');
   readingNext.type = 'button';
-  readingNext.className = 'reading-window__nav-button reading-window__nav-button--next';
+  readingNext.className = 'reading-window__nav-button reading-window__nav-button--next glass-btn';
   const readingNextIcon = createIconElement(getInterfaceIconDefinition('arrowLeft'));
   if (readingNextIcon) {
     readingNextIcon.classList.add('reading-window__nav-button-icon', 'reading-window__nav-button-icon--next');
@@ -1146,7 +1168,7 @@ function buildLayout() {
 
   const readingClose = document.createElement('button');
   readingClose.type = 'button';
-  readingClose.className = 'close-article';
+  readingClose.className = 'close-article glass-btn';
   const readingCloseIcon = createCloseIconElement();
   if (readingCloseIcon) {
     readingClose.appendChild(readingCloseIcon);
@@ -1193,7 +1215,7 @@ function buildLayout() {
   adsHeader.appendChild(adsTitle);
   const adsClose = document.createElement('button');
   adsClose.type = 'button';
-  adsClose.className = 'ads-panel__close';
+  adsClose.className = 'ads-panel__close glass-btn';
   const adsCloseIcon = createCloseIconElement();
   if (adsCloseIcon) {
     adsClose.appendChild(adsCloseIcon);
@@ -1232,7 +1254,7 @@ function buildLayout() {
   settingsDialog.setAttribute('aria-labelledby', 'settings-title');
   const settingsClose = document.createElement('button');
   settingsClose.type = 'button';
-  settingsClose.className = 'settings-panel__close';
+  settingsClose.className = 'settings-panel__close glass-btn';
   const settingsCloseIcon = createCloseIconElement();
   if (settingsCloseIcon) {
     settingsClose.appendChild(settingsCloseIcon);
@@ -1285,6 +1307,21 @@ function buildLayout() {
     zoomControlsField.appendChild(zoomControlsToggle);
     settingsBody.appendChild(zoomControlsField);
   }
+  let zoomClicksField = null;
+  let zoomClicksSpan = null;
+  let zoomClicksToggle = null;
+  if (isZoomClickSettingVisible()) {
+    zoomClicksField = document.createElement('label');
+    zoomClicksField.className = 'settings-field settings-field--toggle';
+    zoomClicksSpan = document.createElement('span');
+    zoomClicksSpan.className = 'settings-field__label';
+    zoomClicksToggle = document.createElement('input');
+    zoomClicksToggle.type = 'checkbox';
+    zoomClicksToggle.className = 'settings-field__control';
+    zoomClicksField.appendChild(zoomClicksSpan);
+    zoomClicksField.appendChild(zoomClicksToggle);
+    settingsBody.appendChild(zoomClicksField);
+  }
   settingsDialog.appendChild(settingsHeader);
   settingsDialog.appendChild(settingsBody);
   settingsPanel.appendChild(settingsDialog);
@@ -1315,7 +1352,7 @@ function buildLayout() {
 
   const audioClose = document.createElement('button');
   audioClose.type = 'button';
-  audioClose.className = 'audio-player__close';
+  audioClose.className = 'audio-player__close glass-btn';
   const audioCloseIcon = createCloseIconElement();
   if (audioCloseIcon) {
     audioClose.appendChild(audioCloseIcon);
@@ -1332,17 +1369,17 @@ function buildLayout() {
 
   const audioPrev = document.createElement('button');
   audioPrev.type = 'button';
-  audioPrev.className = 'audio-player__button audio-player__button--prev';
+  audioPrev.className = 'audio-player__button audio-player__button--prev glass-btn';
   audioPrev.innerHTML = '<span aria-hidden="true">⏮</span>';
 
   const audioPlay = document.createElement('button');
   audioPlay.type = 'button';
-  audioPlay.className = 'audio-player__button audio-player__button--play';
+  audioPlay.className = 'audio-player__button audio-player__button--play glass-btn';
   audioPlay.innerHTML = '<span aria-hidden="true">▶</span>';
 
   const audioNext = document.createElement('button');
   audioNext.type = 'button';
-  audioNext.className = 'audio-player__button audio-player__button--next';
+  audioNext.className = 'audio-player__button audio-player__button--next glass-btn';
   audioNext.innerHTML = '<span aria-hidden="true">⏭</span>';
 
   audioControls.appendChild(audioPrev);
@@ -1388,7 +1425,7 @@ function buildLayout() {
   audioResumeDialog.className = 'audio-resume__dialog';
   const audioResumeClose = document.createElement('button');
   audioResumeClose.type = 'button';
-  audioResumeClose.className = 'audio-resume__close';
+  audioResumeClose.className = 'audio-resume__close glass-btn';
   const audioResumeCloseIcon = createCloseIconElement();
   if (audioResumeCloseIcon) {
     audioResumeClose.appendChild(audioResumeCloseIcon);
@@ -1403,10 +1440,10 @@ function buildLayout() {
   audioResumeActions.className = 'audio-resume__actions';
   const audioResumeContinue = document.createElement('button');
   audioResumeContinue.type = 'button';
-  audioResumeContinue.className = 'audio-resume__button audio-resume__button--primary';
+  audioResumeContinue.className = 'audio-resume__button audio-resume__button--primary glass-btn';
   const audioResumeRestart = document.createElement('button');
   audioResumeRestart.type = 'button';
-  audioResumeRestart.className = 'audio-resume__button audio-resume__button--secondary';
+  audioResumeRestart.className = 'audio-resume__button audio-resume__button--secondary glass-btn';
   audioResumeActions.appendChild(audioResumeContinue);
   audioResumeActions.appendChild(audioResumeRestart);
   audioResumeDialog.appendChild(audioResumeClose);
@@ -1489,6 +1526,9 @@ function buildLayout() {
     zoomControlsField,
     zoomControlsLabel: zoomControlsSpan,
     zoomControlsToggle,
+    zoomClicksField,
+    zoomClicksLabel: zoomClicksSpan,
+    zoomClicksToggle,
     audioBackdrop,
     audioPlayer,
     audioTitle,
@@ -1639,6 +1679,9 @@ function refreshLocalizedTexts(options = {}) {
   if (dom.zoomControlsLabel) {
     dom.zoomControlsLabel.textContent = resolveLabel('settingsZoomPanel', 'Pidä zoom napit aktiivisena');
   }
+  if (dom.zoomClicksLabel) {
+    dom.zoomClicksLabel.textContent = resolveLabel('settingsZoomClicks', 'Salli klikkaukset zoomissa');
+  }
 
   document.documentElement.lang = state.settings.language || 'fi';
 
@@ -1664,7 +1707,7 @@ function applySettings(options = {}) {
   if (!storedLanguage) {
     state.settings.language = normalizeLanguage(state.config?.lang) || 'fi';
   }
-  const { languageSelect, darkModeToggle, zoomControlsToggle } = state.dom;
+  const { languageSelect, darkModeToggle, zoomControlsToggle, zoomClicksToggle } = state.dom;
   if (languageSelect) {
     languageSelect.value = state.settings.language;
   }
@@ -1673,6 +1716,9 @@ function applySettings(options = {}) {
   }
   if (zoomControlsToggle) {
     zoomControlsToggle.checked = Boolean(state.settings.persistentZoomControls);
+  }
+  if (zoomClicksToggle) {
+    zoomClicksToggle.checked = Boolean(state.settings.allowZoomClicks);
   }
   applyTheme();
   refreshLocalizedTexts({ rebuildNavigation: true });
@@ -1762,6 +1808,9 @@ async function init() {
   state.settings.persistentZoomControls = typeof storedSettings.persistentZoomControls === 'boolean'
     ? storedSettings.persistentZoomControls
     : getDefaultPersistentZoomControls();
+  state.settings.allowZoomClicks = typeof storedSettings.allowZoomClicks === 'boolean'
+    ? storedSettings.allowZoomClicks
+    : getDefaultAllowZoomClicks();
 
   applySettings({ persist: false });
   attachGlobalListeners();
@@ -1925,6 +1974,7 @@ function buildNavigation() {
     const button = document.createElement('button');
     button.type = 'button';
     button.classList.add('menu-item');
+    button.classList.add('glass-btn');
     if (item.className) {
       button.classList.add(item.className);
     }
@@ -2069,6 +2119,7 @@ function attachGlobalListeners() {
     languageSelect,
     darkModeToggle,
     zoomControlsToggle,
+    zoomClicksToggle,
     audioBackdrop,
     audioClose,
     audioPrev,
@@ -2154,6 +2205,7 @@ function attachGlobalListeners() {
   languageSelect?.addEventListener('change', handleLanguageChange);
   darkModeToggle?.addEventListener('change', handleDarkModeChange);
   zoomControlsToggle?.addEventListener('change', handleZoomControlsToggle);
+  zoomClicksToggle?.addEventListener('change', handleZoomClicksToggle);
 
   audioClose?.addEventListener('click', () => stopAudioPlayback());
   audioPrev?.addEventListener('click', () => skipAudio(-1));
@@ -2425,6 +2477,15 @@ function handleZoomControlsToggle(event) {
     return;
   }
   state.settings.persistentZoomControls = nextValue;
+  applySettings();
+}
+
+function handleZoomClicksToggle(event) {
+  const nextValue = Boolean(event?.target?.checked);
+  if (nextValue === shouldAllowZoomClicks()) {
+    return;
+  }
+  state.settings.allowZoomClicks = nextValue;
   applySettings();
 }
 
@@ -3846,6 +3907,27 @@ function getStageWidth() {
   return 0;
 }
 
+function getSlideElementAt(index) {
+  const slider = state.dom?.pageSlider;
+  if (!slider || !Number.isInteger(index)) {
+    return null;
+  }
+  const children = slider.children || [];
+  if (index < 0 || index >= children.length) {
+    return null;
+  }
+  const element = children[index];
+  return element instanceof HTMLElement ? element : null;
+}
+
+function getSlideOffsetLeft(index) {
+  const element = getSlideElementAt(index);
+  if (!element) {
+    return 0;
+  }
+  return element.offsetLeft;
+}
+
 function positionSlides(activeIndex, { immediate = false } = {}) {
   const slides = state.slides || [];
   const track = state.dom?.pageTrack;
@@ -3876,7 +3958,8 @@ function positionSlides(activeIndex, { immediate = false } = {}) {
     slider.style.transition = '';
   }
 
-  slider.style.transform = `translate3d(${-activeIndex * 100}%, 0, 0)`;
+  const offset = getSlideOffsetLeft(activeIndex);
+  slider.style.transform = `translate3d(${-offset}px, 0, 0)`;
 
   if (immediate) {
     requestAnimationFrame(() => {
@@ -3915,8 +3998,22 @@ function updateSlideProgress(progress) {
   swipeState.progress = clamped;
 
   if (slider) {
-    const offset = -(state.currentSlide + clamped) * 100;
-    slider.style.transform = `translate3d(${offset}%, 0, 0)`;
+    const baseOffset = getSlideOffsetLeft(state.currentSlide);
+    let targetOffset = baseOffset;
+    if (clamped > 0) {
+      const nextElement = getSlideElementAt(state.currentSlide + 1);
+      if (nextElement) {
+        const nextOffset = nextElement.offsetLeft;
+        targetOffset = baseOffset + (nextOffset - baseOffset) * clamped;
+      }
+    } else if (clamped < 0) {
+      const prevElement = getSlideElementAt(state.currentSlide - 1);
+      if (prevElement) {
+        const prevOffset = prevElement.offsetLeft;
+        targetOffset = baseOffset + (prevOffset - baseOffset) * -clamped;
+      }
+    }
+    slider.style.transform = `translate3d(${-targetOffset}px, 0, 0)`;
   }
 
   slides.forEach((slide, slideIndex) => {
@@ -4337,7 +4434,7 @@ function handleRectClick(event) {
   if (!areArticleClicksEnabled()) {
     return;
   }
-  if (state.zoom.scale > 1) {
+  if (state.zoom.scale > 1 && !shouldAllowZoomClicks()) {
     return;
   }
   const target = event.currentTarget;

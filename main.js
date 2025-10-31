@@ -619,17 +619,69 @@ function buildAdNavigationQuery(ad) {
   return parts.join(', ');
 }
 
+function deriveIssuePathFromImages() {
+  if (!Array.isArray(state.imagePaths) || state.imagePaths.length === 0) {
+    return '';
+  }
+  const basePath = getPaperStaticBasePath();
+  const firstPath = state.imagePaths.find(path => typeof path === 'string' && path.includes('/p'));
+  if (!firstPath || !basePath) {
+    return '';
+  }
+  const withoutFile = firstPath.replace(/p\d+(?:\.[^/?]+)(?:\?.*)?$/, '');
+  if (!withoutFile) {
+    return '';
+  }
+  const marker = `${basePath}/`;
+  const markerIndex = withoutFile.indexOf(marker);
+  if (markerIndex !== -1) {
+    return withoutFile.slice(markerIndex + marker.length);
+  }
+  if (withoutFile.startsWith(basePath)) {
+    return withoutFile.slice(basePath.length + 1);
+  }
+  return withoutFile.startsWith('/') ? withoutFile.slice(1) : withoutFile;
+}
+
 function resolveAdImageUrl(adId) {
-  const issuePath = state.currentIssuePath;
-  if (!issuePath || !adId) {
+  if (!adId) {
     return null;
   }
   const basePath = getPaperStaticBasePath();
   if (!basePath) {
     return null;
   }
+  let issuePath = state.currentIssuePath;
+  if (!issuePath) {
+    issuePath = deriveIssuePathFromImages();
+  }
+  if (!issuePath) {
+    return null;
+  }
   const normalized = normalizeArchivePath(issuePath);
   return `${basePath}/${normalized}a${adId}`;
+}
+
+function getAdById(id) {
+  if (!id) {
+    return null;
+  }
+  if (state.adLookup?.has(id)) {
+    return state.adLookup.get(id);
+  }
+  if (!Array.isArray(state.pageAds)) {
+    return null;
+  }
+  for (const ads of state.pageAds) {
+    if (!Array.isArray(ads)) {
+      continue;
+    }
+    const match = ads.find(item => item && String(item.i) === id);
+    if (match) {
+      return match;
+    }
+  }
+  return null;
 }
 
 function createAdActionElement({
@@ -662,7 +714,11 @@ function createAdActionElement({
   element.classList.add('glass-btn');
   element.dataset.actionKey = key;
   if (className) {
-    element.classList.add(className);
+    const tokens = String(className)
+      .split(/\s+/)
+      .map(token => token.trim())
+      .filter(Boolean);
+    tokens.forEach(token => element.classList.add(token));
   }
   element.setAttribute('aria-label', label);
   element.title = label;
@@ -3086,7 +3142,7 @@ function collectAdsInOrder() {
       if (seen.has(id)) {
         return;
       }
-      const adData = state.adLookup.get(id) || ad;
+      const adData = getAdById(id) || ad;
       seen.add(id);
       ads.push({ id, ad: adData, pageIndex, order: index });
     });
@@ -4438,7 +4494,7 @@ function updateAdHotspotLabels() {
       return;
     }
     const adId = hotspot.dataset.adId;
-    const ad = adId ? state.adLookup.get(adId) : null;
+    const ad = adId ? getAdById(adId) : null;
     const label = ad?.n ? String(ad.n) : getAdActionLabel('hotspot', AD_ACTION_FALLBACKS.hotspot);
     hotspot.setAttribute('aria-label', label);
     const actions = hotspot.querySelectorAll('.ad-action');
@@ -4459,7 +4515,7 @@ function updateAdHotspotLabels() {
       return;
     }
     const adId = card.dataset.adId;
-    const ad = adId ? state.adLookup.get(adId) : null;
+    const ad = adId ? getAdById(adId) : null;
     const label = ad?.n ? String(ad.n) : getAdWindowTitle();
     card.setAttribute('aria-label', label);
     const actions = card.querySelectorAll('.ad-action');
@@ -4484,11 +4540,12 @@ function openAdById(adId) {
     return;
   }
   const id = String(adId);
-  const ad = state.adLookup.get(id);
+  const ad = getAdById(id);
   if (!ad) {
     console.warn('Mainosta ei löytynyt:', adId);
     return;
   }
+
 
   const readingWindow = state.dom.readingWindow;
   const content = state.dom.readingContent;

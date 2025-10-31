@@ -107,6 +107,10 @@ body.mobile-menu-open {
   overflow: hidden;
 }
 
+.reading-window .crop_container {
+    padding: 0px;
+}
+
 .reading-window.is-open,
 .reading-window__content,
 .reading-window__content * {

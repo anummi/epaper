@@ -392,6 +392,39 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   will-change: transform;
 }
 
+@media (max-width: 900px) {
+  :root {
+    --stage-padding-inline: max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+  }
+
+  .page-slider {
+    --mobile-spread-gap-width: clamp(0.35rem, 1.5vw, 0.6rem);
+  }
+
+  .page-slider::after {
+    content: '';
+    position: absolute;
+    top: 8%;
+    bottom: 8%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: var(--mobile-spread-gap-width);
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-radius: var(--mobile-spread-gap-width);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--transition-fast, 180ms) ease;
+    z-index: 3;
+  }
+
+  .page-slider[data-mobile-gap="forward"]::after,
+  .page-slider[data-mobile-gap="backward"]::after {
+    opacity: 1;
+  }
+}
+
 .page-track.is-dragging .page-slider {
   transition: none;
 }

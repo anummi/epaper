@@ -4,6 +4,9 @@ window.epaperConfig = {
   lang: 'fin',
   homePageUrl: 'https://anummi.github.io/epaper',
   labels: {
+    siteTitle: { fi: 'Kuukkeli näköislehti', en: 'Kuukkeli ePaper' },
+    documentTitle: { fi: '{site} – {issue}', en: '{site} – {issue}' },
+    documentTitleFallback: { fi: '{site}', en: '{site}' },
     allPagesTitle: { fi: 'Kaikki sivut', en: 'All pages' },
     archiveTitle: { fi: 'Arkisto', en: 'Archive' },
     archiveEmpty: { fi: 'Arkistossa ei ole numeroita.', en: 'The archive is empty.' },

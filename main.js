@@ -42,6 +42,7 @@ const state = {
   archiveLoaded: false,
   latestIssuePath: null,
   currentIssuePath: null,
+  currentIssueLabel: '',
   slideDefinitions: [],
   slides: [],
   currentSlide: 0,
@@ -631,7 +632,15 @@ function resolveAdImageUrl(adId) {
   return `${basePath}/${normalized}a${adId}`;
 }
 
-function createAdActionElement({ key, href = null, target = '_self', rel = null, onClick = null, className = '' }) {
+function createAdActionElement({
+  key,
+  href = null,
+  target = '_self',
+  rel = null,
+  onClick = null,
+  className = '',
+  showLabel = false
+}) {
   const label = getAdActionLabel(key, AD_ACTION_FALLBACKS[key] || '');
   let element;
   if (href) {
@@ -660,7 +669,14 @@ function createAdActionElement({ key, href = null, target = '_self', rel = null,
   const icon = createIconElement(getAdIconDefinition(key));
   if (icon) {
     element.appendChild(icon);
-  } else {
+  }
+  if (showLabel) {
+    const labelElement = document.createElement('span');
+    labelElement.className = 'ad-action__label';
+    labelElement.textContent = label;
+    labelElement.setAttribute('aria-hidden', 'true');
+    element.appendChild(labelElement);
+  } else if (!icon) {
     element.textContent = label;
   }
   if (typeof onClick === 'function') {
@@ -675,15 +691,23 @@ function setAdDetailsLinkLabel(link, label) {
   if (!(link instanceof HTMLElement)) {
     return;
   }
+  const hasVisibleLabel = link.querySelector('.ad-action__label') instanceof HTMLElement;
   if (label) {
     link.setAttribute('aria-label', label);
-    let hidden = link.querySelector('.ad-details__link-label');
-    if (!(hidden instanceof HTMLElement)) {
-      hidden = document.createElement('span');
-      hidden.className = 'visually-hidden ad-details__link-label';
-      link.appendChild(hidden);
+    if (!hasVisibleLabel) {
+      let hidden = link.querySelector('.ad-details__link-label');
+      if (!(hidden instanceof HTMLElement)) {
+        hidden = document.createElement('span');
+        hidden.className = 'visually-hidden ad-details__link-label';
+        link.appendChild(hidden);
+      }
+      hidden.textContent = label;
+    } else {
+      const hidden = link.querySelector('.ad-details__link-label');
+      if (hidden instanceof HTMLElement) {
+        hidden.remove();
+      }
     }
-    hidden.textContent = label;
   } else {
     link.removeAttribute('aria-label');
     const hidden = link.querySelector('.ad-details__link-label');
@@ -724,6 +748,10 @@ function refreshAdDetailsLink(link) {
     }
   } else {
     link.title = label;
+  }
+  const visibleLabel = link.querySelector('.ad-action__label');
+  if (visibleLabel instanceof HTMLElement) {
+    visibleLabel.textContent = label;
   }
   setAdDetailsLinkLabel(link, label);
 }
@@ -771,7 +799,8 @@ function createAdDetailsSection(ad) {
     const phoneLink = createAdActionElement({
       key: 'call',
       href: `tel:${details.phone}`,
-      className: 'ad-details__link ad-details__link--phone'
+      className: 'ad-details__link ad-details__link--phone',
+      showLabel: true
     });
     phoneLink.dataset.phoneNumber = details.phone;
     refreshAdDetailsLink(phoneLink);
@@ -783,7 +812,8 @@ function createAdDetailsSection(ad) {
       href: details.website,
       target: '_blank',
       rel: 'noopener noreferrer',
-      className: 'ad-details__link ad-details__link--website'
+      className: 'ad-details__link ad-details__link--website',
+      showLabel: true
     });
     refreshAdDetailsLink(websiteLink);
     links.push(websiteLink);
@@ -794,7 +824,8 @@ function createAdDetailsSection(ad) {
       href: details.navigationUrl,
       target: '_blank',
       rel: 'noopener noreferrer',
-      className: 'ad-details__link ad-details__link--navigate'
+      className: 'ad-details__link ad-details__link--navigate',
+      showLabel: true
     });
     refreshAdDetailsLink(navigateLink);
     links.push(navigateLink);
@@ -1761,6 +1792,7 @@ function refreshLocalizedTexts(options = {}) {
     openAdById(state.currentAdId);
   }
   updateAudioUI();
+  updateDocumentTitle();
 }
 
 function applySettings(options = {}) {
@@ -1858,6 +1890,7 @@ async function init() {
     console.error('epaperConfig puuttuu.');
     return;
   }
+  updateDocumentTitle();
 
   buildLayout();
   applyAdPreferences();
@@ -1918,6 +1951,7 @@ function applyIssue(issue, options = {}) {
   if (issue.path) {
     state.currentIssuePath = normalizeArchivePath(issue.path);
   }
+  state.currentIssueLabel = typeof issue.label === 'string' ? issue.label : '';
 
   state.imagePaths = Array.isArray(issue.imagePaths) ? issue.imagePaths : [];
   state.previewImagePaths = Array.isArray(issue.previewImagePaths) ? issue.previewImagePaths : [];
@@ -1983,11 +2017,32 @@ function applyIssue(issue, options = {}) {
   buildArchiveList();
   updateAllPagesSizing();
   updateLocation();
-  document.title = issue.label
-    ? `${issue.label} – ${state.config.paper}`
-    : state.config.paper;
+  updateDocumentTitle();
   updateReadingNavigation();
   updateArchiveIndicator();
+}
+
+function updateDocumentTitle() {
+  if (!state.config) {
+    return;
+  }
+  const siteTitle = resolveLabel('siteTitle', state.config.paper || '');
+  const issueLabel = state.currentIssueLabel || '';
+  const templateKey = issueLabel ? 'documentTitle' : 'documentTitleFallback';
+  const fallbackTemplate = issueLabel ? '{site} – {issue}' : '{site}';
+  const template = resolveLabel(templateKey, fallbackTemplate);
+  const replacements = {
+    site: siteTitle || '',
+    issue: issueLabel || ''
+  };
+  const formatted = formatLabel(template, replacements).replace(/\s+/g, ' ').trim();
+  const fallback = issueLabel && siteTitle
+    ? `${siteTitle} – ${issueLabel}`
+    : issueLabel || siteTitle || document.title;
+  const nextTitle = formatted || fallback;
+  if (nextTitle) {
+    document.title = nextTitle;
+  }
 }
 
 function buildArticlePageLookup(pageMaps) {

@@ -12,8 +12,8 @@ const SUPPORTED_LANGUAGES = {
   fi: 'fi-FI',
   en: 'en-US'
 };
-const ARCHIVE_LATEST_VISIBLE_COUNT = 6;
-const ARCHIVE_MONTH_GROUP_THRESHOLD = 12;
+const ARCHIVE_SIMPLE_LIST_THRESHOLD = 15;
+const ARCHIVE_MONTH_GROUP_THRESHOLD = 15;
 const AD_ACTION_FALLBACKS = {
   openLink: 'Avaa verkkosivusto',
   call: 'Soita',
@@ -671,6 +671,63 @@ function createAdActionElement({ key, href = null, target = '_self', rel = null,
   return element;
 }
 
+function setAdDetailsLinkLabel(link, label) {
+  if (!(link instanceof HTMLElement)) {
+    return;
+  }
+  if (label) {
+    link.setAttribute('aria-label', label);
+    let hidden = link.querySelector('.ad-details__link-label');
+    if (!(hidden instanceof HTMLElement)) {
+      hidden = document.createElement('span');
+      hidden.className = 'visually-hidden ad-details__link-label';
+      link.appendChild(hidden);
+    }
+    hidden.textContent = label;
+  } else {
+    link.removeAttribute('aria-label');
+    const hidden = link.querySelector('.ad-details__link-label');
+    if (hidden instanceof HTMLElement) {
+      hidden.remove();
+    }
+  }
+}
+
+function refreshAdDetailsLink(link) {
+  if (!(link instanceof HTMLElement)) {
+    return;
+  }
+  const actionKey = link.dataset.actionKey;
+  if (!actionKey) {
+    return;
+  }
+  let label = getAdActionLabel(actionKey, AD_ACTION_FALLBACKS[actionKey] || '');
+  if (actionKey === 'call') {
+    const number = link.dataset.phoneNumber || '';
+    if (number) {
+      label = `${label} ${number}`.trim();
+      link.title = number;
+    } else {
+      link.title = label;
+    }
+  } else if (actionKey === 'openLink') {
+    if (link instanceof HTMLAnchorElement) {
+      link.title = link.href || label;
+    } else {
+      link.title = label;
+    }
+  } else if (actionKey === 'navigate') {
+    if (link instanceof HTMLAnchorElement) {
+      link.title = link.href || label;
+    } else {
+      link.title = label;
+    }
+  } else {
+    link.title = label;
+  }
+  setAdDetailsLinkLabel(link, label);
+}
+
 function getAdContactDetails(ad) {
   if (!ad) {
     return {
@@ -711,31 +768,35 @@ function createAdDetailsSection(ad) {
 
   const links = [];
   if (details.phone) {
-    const phoneLink = document.createElement('a');
-    phoneLink.className = 'ad-details__link ad-details__link--phone';
-    phoneLink.href = `tel:${details.phone}`;
-    phoneLink.textContent = details.phone;
-    phoneLink.setAttribute('aria-label', `${getAdActionLabel('call', AD_ACTION_FALLBACKS.call)} ${details.phone}`.trim());
+    const phoneLink = createAdActionElement({
+      key: 'call',
+      href: `tel:${details.phone}`,
+      className: 'ad-details__link ad-details__link--phone'
+    });
+    phoneLink.dataset.phoneNumber = details.phone;
+    refreshAdDetailsLink(phoneLink);
     links.push(phoneLink);
   }
   if (details.website) {
-    const websiteLink = document.createElement('a');
-    websiteLink.className = 'ad-details__link ad-details__link--website';
-    websiteLink.href = details.website;
-    websiteLink.target = '_blank';
-    websiteLink.rel = 'noopener noreferrer';
-    websiteLink.textContent = details.website;
-    websiteLink.setAttribute('aria-label', getAdActionLabel('openLink', AD_ACTION_FALLBACKS.openLink));
+    const websiteLink = createAdActionElement({
+      key: 'openLink',
+      href: details.website,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      className: 'ad-details__link ad-details__link--website'
+    });
+    refreshAdDetailsLink(websiteLink);
     links.push(websiteLink);
   }
   if (details.navigationUrl) {
-    const navigateLink = document.createElement('a');
-    navigateLink.className = 'ad-details__link ad-details__link--navigate';
-    navigateLink.href = details.navigationUrl;
-    navigateLink.target = '_blank';
-    navigateLink.rel = 'noopener noreferrer';
-    navigateLink.textContent = getAdActionLabel('navigate', AD_ACTION_FALLBACKS.navigate);
-    navigateLink.setAttribute('aria-label', getAdActionLabel('navigate', AD_ACTION_FALLBACKS.navigate));
+    const navigateLink = createAdActionElement({
+      key: 'navigate',
+      href: details.navigationUrl,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      className: 'ad-details__link ad-details__link--navigate'
+    });
+    refreshAdDetailsLink(navigateLink);
     links.push(navigateLink);
   }
 
@@ -2563,10 +2624,6 @@ function handleKeydown(event) {
     }
   }
 
-  if (document.body.classList.contains('is-zoomed')) {
-    return;
-  }
-
   if (event.key === 'ArrowRight') {
     gotoSlide(state.currentSlide + 1);
   } else if (event.key === 'ArrowLeft') {
@@ -4360,12 +4417,11 @@ function updateAdHotspotLabels() {
       action.setAttribute('aria-label', actionLabel);
       action.title = actionLabel;
     });
-    const navigationLink = card.querySelector('.ad-details__link--navigate');
-    if (navigationLink instanceof HTMLElement) {
-      navigationLink.textContent = getAdActionLabel('navigate', AD_ACTION_FALLBACKS.navigate);
-      navigationLink.setAttribute('aria-label', getAdActionLabel('navigate', AD_ACTION_FALLBACKS.navigate));
-    }
+    const detailsLinks = card.querySelectorAll('.ad-details__link');
+    detailsLinks.forEach(link => refreshAdDetailsLink(link));
   });
+
+  document.querySelectorAll('.ad-details__link').forEach(link => refreshAdDetailsLink(link));
 }
 
 function openAdById(adId) {
@@ -4538,13 +4594,15 @@ function highlightAllPages() {
 function updateNavButtons() {
   const prevButton = state.dom.navPrev || document.querySelector('.nav-prev');
   const nextButton = state.dom.navNext || document.querySelector('.nav-next');
-  const disableNav = state.zoom.scale > 1;
-
   if (prevButton) {
-    prevButton.disabled = disableNav || state.currentSlide <= 0;
+    const disablePrev = state.currentSlide <= 0;
+    prevButton.disabled = disablePrev;
+    prevButton.setAttribute('aria-disabled', disablePrev ? 'true' : 'false');
   }
   if (nextButton) {
-    nextButton.disabled = disableNav || state.currentSlide >= state.slides.length - 1;
+    const disableNext = state.currentSlide >= state.slides.length - 1;
+    nextButton.disabled = disableNext;
+    nextButton.setAttribute('aria-disabled', disableNext ? 'true' : 'false');
   }
 }
 
@@ -5036,14 +5094,17 @@ function startPan(event) {
 
   panState.pendingInteractive = false;
   const interactiveTarget = isInteractiveSurfaceTarget(event);
-  if (interactiveTarget && (!state.settings.allowZoomClicks || state.zoom.scale === 1)) {
+  const allowZoomClicks = Boolean(state.settings.allowZoomClicks);
+  if (interactiveTarget && (!allowZoomClicks || state.zoom.scale === 1)) {
     return;
   }
   stopPanMomentum();
   updatePointerTracker(event);
   const isTouch = event.pointerType === 'touch';
 
-  if (surface.setPointerCapture) {
+  const shouldDelayPan = interactiveTarget && allowZoomClicks;
+
+  if (!shouldDelayPan && surface.setPointerCapture) {
     try {
       surface.setPointerCapture(event.pointerId);
     } catch (error) {
@@ -5056,6 +5117,10 @@ function startPan(event) {
     return;
   }
   if (pinchState.active) {
+    return;
+  }
+  if (pointerTracker.size >= 2) {
+    beginPinch(surface);
     return;
   }
   if (state.zoom.scale === 1) {
@@ -5072,7 +5137,6 @@ function startPan(event) {
   swipeState.mode = 'free';
   swipeState.active = false;
   swipeState.progress = 0;
-  const shouldDelayPan = interactiveTarget && state.settings.allowZoomClicks;
   if (!shouldDelayPan) {
     event.preventDefault();
   }
@@ -5144,6 +5208,13 @@ function movePan(event) {
     }
     panState.pendingInteractive = false;
     panState.active = true;
+    if (surface instanceof Element && surface.setPointerCapture && !surface.hasPointerCapture?.(event.pointerId)) {
+      try {
+        surface.setPointerCapture(event.pointerId);
+      } catch (error) {
+        // Ignore pointer capture errors
+      }
+    }
     panState.lastX = panState.startX;
     panState.lastY = panState.startY;
     panState.lastTime = event.timeStamp || performance.now();
@@ -5892,10 +5963,12 @@ function groupArchiveEntriesByYear(entries) {
     groups.get(parts.year).push(entry);
   });
   return {
-    groups: Array.from(groups.entries()).map(([year, items]) => ({
-      year: Number(year),
-      entries: items
-    })),
+    groups: Array.from(groups.entries())
+      .map(([year, items]) => ({
+        year: Number(year),
+        entries: items
+      }))
+      .sort((a, b) => b.year - a.year),
     undated
   };
 }
@@ -5912,10 +5985,12 @@ function groupArchiveEntriesByMonth(entries) {
     }
     groups.get(parts.month).push(entry);
   });
-  return Array.from(groups.entries()).map(([month, items]) => ({
-    month: Number(month),
-    entries: items
-  }));
+  return Array.from(groups.entries())
+    .map(([month, items]) => ({
+      month: Number(month),
+      entries: items
+    }))
+    .sort((a, b) => b.month - a.month);
 }
 
 function getArchiveMonthLabel(year, month) {
@@ -6050,123 +6125,124 @@ function buildArchiveList() {
 
   const currentPath = normalizeArchivePath(state.currentIssuePath);
   const entries = state.archiveItems.slice();
-  const latestEntries = entries.slice(0, ARCHIVE_LATEST_VISIBLE_COUNT);
-  const olderEntries = entries.slice(ARCHIVE_LATEST_VISIBLE_COUNT);
+  const totalCount = entries.length;
   const fragment = document.createDocumentFragment();
 
-  const latestSection = createArchiveSection(
-    resolveLabel('archiveLatestIssues', 'Viimeisimmät numerot'),
-    latestEntries,
-    currentPath,
-    'archive-panel__section--latest'
-  );
-  if (latestSection) {
-    fragment.appendChild(latestSection);
+  if (totalCount <= ARCHIVE_SIMPLE_LIST_THRESHOLD) {
+    const singleSection = createArchiveSection(
+      resolveLabel('archiveOlderIssues', 'Arkistonumerot'),
+      entries,
+      currentPath,
+      'archive-panel__section--all'
+    );
+    if (singleSection) {
+      fragment.appendChild(singleSection);
+    }
+    list.appendChild(fragment);
+    return;
   }
 
-  if (olderEntries.length) {
-    const olderSection = document.createElement('li');
-    olderSection.className = 'archive-panel__section archive-panel__section--older';
-    const olderHeading = document.createElement('h3');
-    olderHeading.className = 'archive-panel__section-title';
-    olderHeading.textContent = resolveLabel('archiveOlderIssues', 'Arkistonumerot');
-    olderSection.appendChild(olderHeading);
+  const groupedSection = document.createElement('li');
+  groupedSection.className = 'archive-panel__section archive-panel__section--older';
+  const groupedHeading = document.createElement('h3');
+  groupedHeading.className = 'archive-panel__section-title';
+  groupedHeading.textContent = resolveLabel('archiveOlderIssues', 'Arkistonumerot');
+  groupedSection.appendChild(groupedHeading);
 
-    const yearList = document.createElement('div');
-    yearList.className = 'archive-panel__year-list';
+  const yearList = document.createElement('div');
+  yearList.className = 'archive-panel__year-list';
 
-    const { groups: yearGroups, undated } = groupArchiveEntriesByYear(olderEntries);
-    const activeEntry = entries.find(entry => normalizeArchivePath(entry.p) === currentPath) || null;
-    const activeParts = activeEntry ? getArchiveEntryParts(activeEntry) : null;
-    const hasActiveYear = Boolean(activeParts);
-    let openedYear = false;
+  const { groups: yearGroups, undated } = groupArchiveEntriesByYear(entries);
+  const activeEntry = entries.find(entry => normalizeArchivePath(entry.p) === currentPath) || null;
+  const activeParts = activeEntry ? getArchiveEntryParts(activeEntry) : null;
+  const hasActiveYear = Boolean(activeParts);
+  let openedYear = false;
 
-    yearGroups.forEach(({ year, entries: yearEntries }) => {
-      const yearDetails = document.createElement('details');
-      yearDetails.className = 'archive-panel__year';
-      const summary = document.createElement('summary');
-      summary.className = 'archive-panel__year-summary';
-      summary.textContent = formatArchiveYearSummary(year, yearEntries.length);
-      yearDetails.appendChild(summary);
+  yearGroups.forEach(({ year, entries: yearEntries }) => {
+    const yearDetails = document.createElement('details');
+    yearDetails.className = 'archive-panel__year';
+    const summary = document.createElement('summary');
+    summary.className = 'archive-panel__year-summary';
+    summary.textContent = formatArchiveYearSummary(year, yearEntries.length);
+    yearDetails.appendChild(summary);
 
-      const shouldGroupByMonth = yearEntries.length > ARCHIVE_MONTH_GROUP_THRESHOLD;
-      if (shouldGroupByMonth) {
-        const monthList = document.createElement('div');
-        monthList.className = 'archive-panel__month-list';
-        const monthGroups = groupArchiveEntriesByMonth(yearEntries);
-        let hasOpenedMonth = false;
-        monthGroups.forEach(({ month, entries: monthEntries }) => {
-          const monthDetails = document.createElement('details');
-          monthDetails.className = 'archive-panel__month';
-          const monthSummary = document.createElement('summary');
-          monthSummary.className = 'archive-panel__month-summary';
-          const monthLabel = getArchiveMonthLabel(year, month) || `${month + 1}`;
-          monthSummary.textContent = formatArchiveMonthSummary(monthLabel, monthEntries.length);
-          monthDetails.appendChild(monthSummary);
+    const shouldGroupByMonth = yearEntries.length > ARCHIVE_MONTH_GROUP_THRESHOLD;
+    if (shouldGroupByMonth) {
+      const monthList = document.createElement('div');
+      monthList.className = 'archive-panel__month-list';
+      const monthGroups = groupArchiveEntriesByMonth(yearEntries);
+      let hasOpenedMonth = false;
+      monthGroups.forEach(({ month, entries: monthEntries }) => {
+        const monthDetails = document.createElement('details');
+        monthDetails.className = 'archive-panel__month';
+        const monthSummary = document.createElement('summary');
+        monthSummary.className = 'archive-panel__month-summary';
+        const monthLabel = getArchiveMonthLabel(year, month) || `${month + 1}`;
+        monthSummary.textContent = formatArchiveMonthSummary(monthLabel, monthEntries.length);
+        monthDetails.appendChild(monthSummary);
 
-          const monthItems = document.createElement('ul');
-          monthItems.className = 'archive-panel__section-list archive-panel__section-list--month';
-          monthEntries.forEach(entry => {
-            monthItems.appendChild(createArchiveListItem(entry, currentPath));
-          });
-          monthDetails.appendChild(monthItems);
-
-          if (activeParts && activeParts.year === year && activeParts.month === month) {
-            monthDetails.open = true;
-            hasOpenedMonth = true;
-          }
-
-          monthList.appendChild(monthDetails);
+        const monthItems = document.createElement('ul');
+        monthItems.className = 'archive-panel__section-list archive-panel__section-list--month';
+        monthEntries.forEach(entry => {
+          monthItems.appendChild(createArchiveListItem(entry, currentPath));
         });
-        if (!hasOpenedMonth) {
-          const firstMonth = monthList.firstElementChild;
-          if (firstMonth && firstMonth.tagName === 'DETAILS') {
-            firstMonth.open = true;
-          }
+        monthDetails.appendChild(monthItems);
+
+        if (activeParts && activeParts.year === year && activeParts.month === month) {
+          monthDetails.open = true;
+          hasOpenedMonth = true;
         }
-        yearDetails.appendChild(monthList);
-      } else {
-        const yearItems = document.createElement('ul');
-        yearItems.className = 'archive-panel__section-list';
-        yearEntries.forEach(entry => {
-          yearItems.appendChild(createArchiveListItem(entry, currentPath));
-        });
-        yearDetails.appendChild(yearItems);
-      }
 
-      const shouldOpenYear = (activeParts && activeParts.year === year) || (!hasActiveYear && !openedYear);
-      yearDetails.open = shouldOpenYear;
-      if (shouldOpenYear) {
-        openedYear = true;
-      }
-
-      yearList.appendChild(yearDetails);
-    });
-
-    if (undated.length) {
-      const undatedDetails = document.createElement('details');
-      undatedDetails.className = 'archive-panel__year archive-panel__year--undated';
-      const undatedSummary = document.createElement('summary');
-      undatedSummary.className = 'archive-panel__year-summary';
-      undatedSummary.textContent = resolveLabel('archiveUnknownDate', 'Tuntematon ajankohta');
-      undatedDetails.appendChild(undatedSummary);
-      const undatedItems = document.createElement('ul');
-      undatedItems.className = 'archive-panel__section-list';
-      undated.forEach(entry => {
-        undatedItems.appendChild(createArchiveListItem(entry, currentPath));
+        monthList.appendChild(monthDetails);
       });
-      undatedDetails.appendChild(undatedItems);
-      const shouldOpenUndated = !hasActiveYear && !openedYear;
-      undatedDetails.open = shouldOpenUndated;
-      if (shouldOpenUndated) {
-        openedYear = true;
+      if (!hasOpenedMonth) {
+        const firstMonth = monthList.firstElementChild;
+        if (firstMonth && firstMonth.tagName === 'DETAILS') {
+          firstMonth.open = true;
+        }
       }
-      yearList.appendChild(undatedDetails);
+      yearDetails.appendChild(monthList);
+    } else {
+      const yearItems = document.createElement('ul');
+      yearItems.className = 'archive-panel__section-list';
+      yearEntries.forEach(entry => {
+        yearItems.appendChild(createArchiveListItem(entry, currentPath));
+      });
+      yearDetails.appendChild(yearItems);
     }
 
-    olderSection.appendChild(yearList);
-    fragment.appendChild(olderSection);
+    const shouldOpenYear = (activeParts && activeParts.year === year) || (!hasActiveYear && !openedYear);
+    yearDetails.open = shouldOpenYear;
+    if (shouldOpenYear) {
+      openedYear = true;
+    }
+
+    yearList.appendChild(yearDetails);
+  });
+
+  if (undated.length) {
+    const undatedDetails = document.createElement('details');
+    undatedDetails.className = 'archive-panel__year archive-panel__year--undated';
+    const undatedSummary = document.createElement('summary');
+    undatedSummary.className = 'archive-panel__year-summary';
+    undatedSummary.textContent = resolveLabel('archiveUnknownDate', 'Tuntematon ajankohta');
+    undatedDetails.appendChild(undatedSummary);
+    const undatedItems = document.createElement('ul');
+    undatedItems.className = 'archive-panel__section-list';
+    undated.forEach(entry => {
+      undatedItems.appendChild(createArchiveListItem(entry, currentPath));
+    });
+    undatedDetails.appendChild(undatedItems);
+    const shouldOpenUndated = !hasActiveYear && !openedYear;
+    undatedDetails.open = shouldOpenUndated;
+    if (shouldOpenUndated) {
+      openedYear = true;
+    }
+    yearList.appendChild(undatedDetails);
   }
+
+  groupedSection.appendChild(yearList);
+  fragment.appendChild(groupedSection);
 
   list.appendChild(fragment);
 }

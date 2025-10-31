@@ -3924,12 +3924,19 @@ function updateSlideProgress(progress) {
       const direction = clamped > 0 ? 1 : -1;
       const targetIndex = state.currentSlide + direction;
       const targetSlide = state.slides?.[targetIndex];
-      const targetPageIndex = Array.isArray(targetSlide?.pages) ? targetSlide.pages[0] : null;
-      if (Number.isInteger(targetPageIndex)) {
-        const pageNumber = targetPageIndex + 1;
-        const shouldGap = direction > 0 ? pageNumber % 2 === 0 : pageNumber % 2 === 1;
-        if (shouldGap) {
-          slider.dataset.mobileGap = direction > 0 ? 'forward' : 'backward';
+      const targetPages = Array.isArray(targetSlide?.pages) ? targetSlide.pages : null;
+      if (targetPages && targetPages.length) {
+        const gapPageIndex = direction > 0
+          ? targetPages[0]
+          : targetPages[targetPages.length - 1];
+        if (Number.isInteger(gapPageIndex)) {
+          const pageNumber = gapPageIndex + 1;
+          const shouldGap = direction > 0 ? pageNumber % 2 === 0 : pageNumber % 2 === 1;
+          if (shouldGap) {
+            slider.dataset.mobileGap = direction > 0 ? 'forward' : 'backward';
+          } else {
+            delete slider.dataset.mobileGap;
+          }
         } else {
           delete slider.dataset.mobileGap;
         }
@@ -3970,7 +3977,10 @@ function updateSlideLayout() {
 }
 
 function buildSlideDefinitions({ orientation, isCompact }) {
-  if (isCompact || orientation === 'portrait') {
+  if (isCompact) {
+    return buildSpreadDefinitions();
+  }
+  if (orientation === 'portrait') {
     return state.imagePaths.map((_, index) => [index]);
   }
   return buildSpreadDefinitions();

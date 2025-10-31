@@ -855,8 +855,7 @@ function createAdDetailsSection(ad) {
     const phoneLink = createAdActionElement({
       key: 'call',
       href: `tel:${details.phone}`,
-      className: 'ad-details__link ad-details__link--phone',
-      showLabel: true
+      className: 'ad-details__link ad-details__link--phone'
     });
     phoneLink.dataset.phoneNumber = details.phone;
     refreshAdDetailsLink(phoneLink);
@@ -868,8 +867,7 @@ function createAdDetailsSection(ad) {
       href: details.website,
       target: '_blank',
       rel: 'noopener noreferrer',
-      className: 'ad-details__link ad-details__link--website',
-      showLabel: true
+      className: 'ad-details__link ad-details__link--website'
     });
     refreshAdDetailsLink(websiteLink);
     links.push(websiteLink);
@@ -880,8 +878,7 @@ function createAdDetailsSection(ad) {
       href: details.navigationUrl,
       target: '_blank',
       rel: 'noopener noreferrer',
-      className: 'ad-details__link ad-details__link--navigate',
-      showLabel: true
+      className: 'ad-details__link ad-details__link--navigate'
     });
     refreshAdDetailsLink(navigateLink);
     links.push(navigateLink);

@@ -107,7 +107,8 @@ const panState = {
   lastY: 0,
   lastTime: 0,
   velocityX: 0,
-  velocityY: 0
+  velocityY: 0,
+  pendingInteractive: false
 };
 
 const panMomentum = {
@@ -1983,14 +1984,14 @@ function buildNavigation() {
     }
     button.dataset.bound = 'false';
     
+    let iconElement = null;
     if (item.icon && item.icon.path) {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('aria-hidden', 'true');
-      svg.setAttribute('viewBox', item.icon.viewBox || '0 0 24 24');
+      iconElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      iconElement.setAttribute('aria-hidden', 'true');
+      iconElement.setAttribute('viewBox', item.icon.viewBox || '0 0 24 24');
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', item.icon.path);
-      svg.appendChild(path);
-      button.appendChild(svg);
+      iconElement.appendChild(path);
     }
 
     const labelText = getLocalizedValue(item.label, '');
@@ -2000,6 +2001,9 @@ function buildNavigation() {
       button.appendChild(label);
       button.title = labelText;
       button.setAttribute('aria-label', labelText);
+    }
+    if (iconElement) {
+      button.appendChild(iconElement);
     }
 
     container.appendChild(button);
@@ -5030,7 +5034,9 @@ function startPan(event) {
     return;
   }
 
-  if (isInteractiveSurfaceTarget(event)) {
+  panState.pendingInteractive = false;
+  const interactiveTarget = isInteractiveSurfaceTarget(event);
+  if (interactiveTarget && (!state.settings.allowZoomClicks || state.zoom.scale === 1)) {
     return;
   }
   stopPanMomentum();
@@ -5057,6 +5063,7 @@ function startPan(event) {
     panState.active = false;
     panState.pointerId = null;
     panState.surface = surface;
+    panState.pendingInteractive = false;
     return;
   }
   swipeState.isTracking = false;
@@ -5065,8 +5072,11 @@ function startPan(event) {
   swipeState.mode = 'free';
   swipeState.active = false;
   swipeState.progress = 0;
-  event.preventDefault();
-  panState.active = true;
+  const shouldDelayPan = interactiveTarget && state.settings.allowZoomClicks;
+  if (!shouldDelayPan) {
+    event.preventDefault();
+  }
+  panState.active = !shouldDelayPan;
   panState.pointerId = event.pointerId;
   panState.startX = event.clientX;
   panState.startY = event.clientY;
@@ -5078,6 +5088,7 @@ function startPan(event) {
   panState.lastTime = event.timeStamp || performance.now();
   panState.velocityX = 0;
   panState.velocityY = 0;
+  panState.pendingInteractive = shouldDelayPan;
 }
 
 function handleStagePointerDown(event) {
@@ -5123,6 +5134,23 @@ function movePan(event) {
   const surface = panState.surface instanceof Element
     ? panState.surface
     : (event.currentTarget instanceof Element ? event.currentTarget : null);
+
+  if (panState.pendingInteractive && event.pointerId === panState.pointerId) {
+    const initialDx = event.clientX - panState.startX;
+    const initialDy = event.clientY - panState.startY;
+    const distance = Math.hypot(initialDx, initialDy);
+    if (distance <= 8) {
+      return;
+    }
+    panState.pendingInteractive = false;
+    panState.active = true;
+    panState.lastX = panState.startX;
+    panState.lastY = panState.startY;
+    panState.lastTime = event.timeStamp || performance.now();
+    if (!event.defaultPrevented) {
+      event.preventDefault();
+    }
+  }
 
   if (isSwipePointer && swipeState.mode === 'free') {
     const dx = event.clientX - swipeState.startX;
@@ -5302,6 +5330,20 @@ function endPan(event) {
     return;
   }
 
+  if (panState.pendingInteractive && event.pointerId === panState.pointerId) {
+    if (surface && surface.hasPointerCapture?.(event.pointerId)) {
+      try {
+        surface.releasePointerCapture(event.pointerId);
+      } catch (error) {
+        // ignore
+      }
+    }
+    panState.pendingInteractive = false;
+    panState.pointerId = null;
+    panState.surface = null;
+    return;
+  }
+
   if (!panState.active || event.pointerId !== panState.pointerId) {
     return;
   }
@@ -5325,6 +5367,7 @@ function endPan(event) {
   panState.lastTime = 0;
   panState.velocityX = 0;
   panState.velocityY = 0;
+  panState.pendingInteractive = false;
 
   if (
     wasPanPointer &&

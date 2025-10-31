@@ -1671,13 +1671,22 @@ body.theme-dark .reading-backdrop {
 }
 
 .ad-details__link {
-  color: var(--accent);
+  display: inline-flex;
   text-decoration: none;
+}
+
+.ad-details__link:not(.ad-action) {
+  color: var(--accent);
   font-weight: 500;
 }
 
 .ad-details__link:hover,
 .ad-details__link:focus-visible {
+  text-decoration: none;
+}
+
+.ad-details__link:not(.ad-action):hover,
+.ad-details__link:not(.ad-action):focus-visible {
   text-decoration: underline;
 }
 

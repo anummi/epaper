@@ -1,6 +1,6 @@
 'use strict';
 
-const maxScale = 4;
+const maxScale = 5;
 const minScale = 1;
 const scaleStep = 0.5;
 const articleBaseUrl = 'https://sandbox-devtest2.anygraaf.net/';
@@ -101,7 +101,20 @@ const panState = {
   startY: 0,
   baseX: 0,
   baseY: 0,
-  surface: null
+  surface: null,
+  lastX: 0,
+  lastY: 0,
+  lastTime: 0,
+  velocityX: 0,
+  velocityY: 0
+};
+
+const panMomentum = {
+  frame: null,
+  surface: null,
+  velocityX: 0,
+  velocityY: 0,
+  lastTime: 0
 };
 
 const pointerTracker = new Map();
@@ -140,6 +153,77 @@ const readingSwipeState = {
 };
 
 const READING_SWIPE_CANCEL_THRESHOLD = 16;
+const PAN_MOMENTUM_MIN_VELOCITY = 0.02;
+const PAN_MOMENTUM_DECELERATION = 0.0032;
+const PAN_SWIPE_OVERFLOW_THRESHOLD = 60;
+const ZOOM_OVERFLOW_SWIPE_PROGRESS_THRESHOLD = 0.45;
+
+function stopPanMomentum() {
+  if (panMomentum.frame !== null) {
+    cancelAnimationFrame(panMomentum.frame);
+    panMomentum.frame = null;
+  }
+  panMomentum.surface = null;
+  panMomentum.velocityX = 0;
+  panMomentum.velocityY = 0;
+  panMomentum.lastTime = 0;
+}
+
+function stepPanMomentum(timestamp) {
+  const surface = panMomentum.surface;
+  if (!(surface instanceof Element) || state.zoom.scale <= 1) {
+    stopPanMomentum();
+    return;
+  }
+
+  const previousTime = panMomentum.lastTime || timestamp;
+  const deltaTime = Math.max(0, timestamp - previousTime);
+  panMomentum.lastTime = timestamp;
+
+  const friction = Math.exp(-PAN_MOMENTUM_DECELERATION * deltaTime);
+  panMomentum.velocityX *= friction;
+  panMomentum.velocityY *= friction;
+
+  const velocityMagnitude = Math.hypot(panMomentum.velocityX, panMomentum.velocityY);
+  if (velocityMagnitude < PAN_MOMENTUM_MIN_VELOCITY) {
+    stopPanMomentum();
+    return;
+  }
+
+  const moveX = panMomentum.velocityX * deltaTime;
+  const moveY = panMomentum.velocityY * deltaTime;
+  const desiredX = state.zoom.translateX + moveX;
+  const desiredY = state.zoom.translateY + moveY;
+  const constrained = constrainTranslation(surface, desiredX, desiredY, state.zoom.scale);
+  const hitBoundary = Math.abs(constrained.x - desiredX) > 0.5 || Math.abs(constrained.y - desiredY) > 0.5;
+
+  state.zoom.translateX = constrained.x;
+  state.zoom.translateY = constrained.y;
+  applyZoom(surface);
+
+  if (hitBoundary) {
+    stopPanMomentum();
+    return;
+  }
+
+  panMomentum.frame = requestAnimationFrame(stepPanMomentum);
+}
+
+function startPanMomentum(surface, velocityX, velocityY) {
+  if (!(surface instanceof Element)) {
+    return;
+  }
+  const speed = Math.hypot(velocityX, velocityY);
+  if (speed < PAN_MOMENTUM_MIN_VELOCITY) {
+    return;
+  }
+  stopPanMomentum();
+  panMomentum.surface = surface;
+  panMomentum.velocityX = velocityX;
+  panMomentum.velocityY = velocityY;
+  panMomentum.lastTime = performance.now();
+  panMomentum.frame = requestAnimationFrame(stepPanMomentum);
+}
 
 const UI_IDLE_DELAY = 4000;
 const UI_ACTIVITY_THROTTLE = 120;
@@ -242,6 +326,19 @@ function formatLabel(template, replacements = {}) {
     const pattern = new RegExp(`\\{${key}\\}`, 'g');
     return result.replace(pattern, String(value));
   }, template);
+}
+
+function derivePageIndicatorLabel(template, fallback) {
+  if (typeof template === 'string') {
+    const match = template.match(/^[^{]+/);
+    if (match) {
+      const value = match[0].trim();
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return fallback;
 }
 
 function getNavigationLabelByAction(action) {
@@ -843,10 +940,6 @@ function buildLayout() {
   zoomIn.className = 'zoom-button zoom-in';
   zoomIn.textContent = '+';
   zoomMenu.appendChild(zoomIn);
-  const zoomReset = document.createElement('button');
-  zoomReset.type = 'button';
-  zoomReset.className = 'zoom-button zoom-reset';
-  zoomMenu.appendChild(zoomReset);
   const zoomPageLabel = document.createElement('span');
   zoomPageLabel.className = 'zoom-menu__page-label';
   zoomPageLabel.hidden = true;
@@ -1346,7 +1439,6 @@ function buildLayout() {
     zoomMenu,
     zoomOut,
     zoomIn,
-    zoomReset,
     zoomPageLabel,
     zoomPageIndicator,
     allPages,
@@ -1450,11 +1542,6 @@ function refreshLocalizedTexts(options = {}) {
   dom.navNext?.setAttribute('aria-label', resolveLabel('nextPage', 'Seuraava sivu'));
   dom.zoomOut?.setAttribute('aria-label', resolveLabel('zoomOut', 'Zoomaa ulos'));
   dom.zoomIn?.setAttribute('aria-label', resolveLabel('zoomIn', 'Zoomaa sisään'));
-  if (dom.zoomReset) {
-    const resetLabel = resolveLabel('zoomReset', 'Palauta');
-    dom.zoomReset.textContent = resetLabel;
-    dom.zoomReset.setAttribute('aria-label', resetLabel);
-  }
   if (dom.mobileMenuButton) {
     const openLabel = resolveLabel('openMenu', 'Avaa valikko');
     dom.mobileMenuButton.setAttribute('aria-label', openLabel);
@@ -1961,7 +2048,6 @@ function attachGlobalListeners() {
     navNext,
     zoomIn,
     zoomOut,
-    zoomReset,
     allPages,
     allPagesClose,
     printPanel,
@@ -2006,7 +2092,6 @@ function attachGlobalListeners() {
 
   zoomIn?.addEventListener('click', () => adjustZoom(1));
   zoomOut?.addEventListener('click', () => adjustZoom(-1));
-  zoomReset?.addEventListener('click', resetZoom);
   
   allPagesClose?.addEventListener('click', () => toggleAllPages(false));
   allPages?.addEventListener('click', event => {
@@ -4394,14 +4479,16 @@ function updatePageIndicator() {
 
   const isZoomed = state.zoom.scale > 1;
   const persistentZoom = shouldKeepZoomMenuVisible();
-  const showZoomIndicator = isZoomed;
-  const showZoomLabel = persistentZoom && !isZoomed;
-  const hideMainIndicator = isZoomed || persistentZoom;
+  const shouldShowZoomInfo = isZoomed || persistentZoom;
+  const showZoomIndicator = shouldShowZoomInfo;
+  const showZoomLabel = shouldShowZoomInfo;
+  const hideMainIndicator = shouldShowZoomInfo;
   const pages = [...current.pages].sort((a, b) => a - b);
   const firstPage = pages[0] + 1;
   const lastPage = pages[pages.length - 1] + 1;
   let text = '';
   let shortText = '';
+  let labelText = '';
 
   if (pages.length > 1 && firstPage !== lastPage) {
     const template = resolveLabel('pageIndicatorRange', 'Sivut {from}–{to} / {total}');
@@ -4411,6 +4498,8 @@ function updatePageIndicator() {
       total: totalPages
     });
     shortText = `${firstPage}–${lastPage} / ${totalPages}`;
+    const fallback = state.settings.language === 'en' ? 'Pages' : 'Sivut';
+    labelText = derivePageIndicatorLabel(template, fallback);
   } else {
     const template = resolveLabel('pageIndicatorSingle', 'Sivu {page} / {total}');
     text = formatLabel(template, {
@@ -4418,6 +4507,8 @@ function updatePageIndicator() {
       total: totalPages
     });
     shortText = `${firstPage} / ${totalPages}`;
+    const fallback = state.settings.language === 'en' ? 'Page' : 'Sivu';
+    labelText = derivePageIndicatorLabel(template, fallback);
   }
 
   if (indicator) {
@@ -4427,7 +4518,7 @@ function updatePageIndicator() {
   }
 
   if (zoomLabel) {
-    zoomLabel.textContent = text;
+    zoomLabel.textContent = labelText;
     zoomLabel.hidden = !showZoomLabel;
     zoomLabel.setAttribute('aria-hidden', showZoomLabel ? 'false' : 'true');
   }
@@ -4446,6 +4537,7 @@ function getActiveSurface() {
 
 function resetZoom(options = {}) {
   const { targetSurface = null, additionalSurfaces = [] } = options;
+  stopPanMomentum();
   state.zoom.scale = 1;
   state.zoom.translateX = 0;
   state.zoom.translateY = 0;
@@ -4476,6 +4568,7 @@ function setZoom(scale, focalPoint) {
     return;
   }
 
+  stopPanMomentum();
   const previousScale = state.zoom.scale;
   const clampedScale = clamp(scale, minScale, maxScale);
   let translateX = state.zoom.translateX;
@@ -4591,7 +4684,7 @@ function applyZoom(surface) {
 }
 
 function updateZoomUI() {
-  const { zoomIn, zoomOut, zoomReset, zoomPageLabel, zoomPageIndicator } = state.dom || {};
+  const { zoomIn, zoomOut, zoomPageLabel, zoomPageIndicator } = state.dom || {};
   const isZoomed = state.zoom.scale > 1;
   const persistent = shouldKeepZoomMenuVisible();
 
@@ -4601,19 +4694,13 @@ function updateZoomUI() {
   if (zoomOut) {
     zoomOut.disabled = state.zoom.scale <= minScale;
   }
-  if (zoomReset) {
-    const showReset = isZoomed;
-    zoomReset.hidden = !showReset;
-    zoomReset.setAttribute('aria-hidden', showReset ? 'false' : 'true');
-    zoomReset.disabled = state.zoom.scale === 1;
-  }
   if (zoomPageLabel) {
-    const showLabel = persistent && !isZoomed;
+    const showLabel = persistent || isZoomed;
     zoomPageLabel.hidden = !showLabel;
     zoomPageLabel.setAttribute('aria-hidden', showLabel ? 'false' : 'true');
   }
   if (zoomPageIndicator) {
-    const showIndicator = isZoomed;
+    const showIndicator = isZoomed || persistent;
     zoomPageIndicator.hidden = !showIndicator;
     zoomPageIndicator.setAttribute('aria-hidden', showIndicator ? 'false' : 'true');
   }
@@ -4757,6 +4844,7 @@ function beginPinch(surface) {
     return;
   }
   const targetSurface = surface instanceof Element ? surface : getActiveSurface();
+  stopPanMomentum();
   pinchState.active = true;
   pinchState.surface = targetSurface;
   pinchState.initialDistance = distance;
@@ -4813,6 +4901,11 @@ function endPinchGesture() {
       panState.baseX = state.zoom.translateX;
       panState.baseY = state.zoom.translateY;
       panState.surface = surface;
+      panState.lastX = point.x;
+      panState.lastY = point.y;
+      panState.lastTime = performance.now();
+      panState.velocityX = 0;
+      panState.velocityY = 0;
       return;
     }
   }
@@ -4838,6 +4931,7 @@ function startPan(event) {
   if (isInteractiveSurfaceTarget(event)) {
     return;
   }
+  stopPanMomentum();
   updatePointerTracker(event);
   const isTouch = event.pointerType === 'touch';
 
@@ -4877,6 +4971,11 @@ function startPan(event) {
   panState.baseX = state.zoom.translateX;
   panState.baseY = state.zoom.translateY;
   panState.surface = surface;
+  panState.lastX = event.clientX;
+  panState.lastY = event.clientY;
+  panState.lastTime = event.timeStamp || performance.now();
+  panState.velocityX = 0;
+  panState.velocityY = 0;
 }
 
 function handleStagePointerDown(event) {
@@ -4888,6 +4987,7 @@ function handleStagePointerDown(event) {
     return;
   }
 
+  stopPanMomentum();
   const isTouch = event.pointerType === 'touch';
   if (isTouch) {
     updatePointerTracker(event);
@@ -4961,6 +5061,19 @@ function movePan(event) {
   }
 
   event.preventDefault();
+  const now = event.timeStamp || performance.now();
+  if (panState.lastTime) {
+    const timeDelta = now - panState.lastTime;
+    if (timeDelta > 0) {
+      const incrementalX = event.clientX - panState.lastX;
+      const incrementalY = event.clientY - panState.lastY;
+      panState.velocityX = incrementalX / timeDelta;
+      panState.velocityY = incrementalY / timeDelta;
+    }
+  }
+  panState.lastX = event.clientX;
+  panState.lastY = event.clientY;
+  panState.lastTime = now;
   const dx = event.clientX - panState.startX;
   const dy = event.clientY - panState.startY;
   const desiredX = panState.baseX + dx;
@@ -4984,7 +5097,11 @@ function movePan(event) {
     return;
   }
 
-  if (Math.abs(overflowX) > 12 && ((overflowX < 0 && canGoNext) || (overflowX > 0 && canGoPrev))) {
+  if (
+    Math.abs(overflowX) > PAN_SWIPE_OVERFLOW_THRESHOLD &&
+    Math.abs(progress) >= ZOOM_OVERFLOW_SWIPE_PROGRESS_THRESHOLD &&
+    ((overflowX < 0 && canGoNext) || (overflowX > 0 && canGoPrev))
+  ) {
     beginSwipeTracking(event, { mode: 'zoom-overflow', initialProgress: progress });
     swipeState.active = true;
     setSlidesInteractive(true);
@@ -5048,7 +5165,7 @@ function endPan(event) {
           progress = -overflowX / stageWidth;
           swipeState.progress = progress;
         }
-        if (Math.abs(progress) >= 0.3) {
+        if (Math.abs(progress) >= ZOOM_OVERFLOW_SWIPE_PROGRESS_THRESHOLD) {
           const direction = progress > 0 ? 1 : -1;
           const targetIndex = state.currentSlide + direction;
           if (targetIndex >= 0 && targetIndex < state.slides.length) {
@@ -5094,9 +5211,27 @@ function endPan(event) {
       // ignore
     }
   }
+  const wasPanPointer = panState.active && event.pointerId === panState.pointerId;
+  const momentumSurface = surface;
+  const velocityX = panState.velocityX;
+  const velocityY = panState.velocityY;
   panState.active = false;
   panState.pointerId = null;
   panState.surface = null;
+  panState.lastX = 0;
+  panState.lastY = 0;
+  panState.lastTime = 0;
+  panState.velocityX = 0;
+  panState.velocityY = 0;
+
+  if (
+    wasPanPointer &&
+    momentumSurface instanceof Element &&
+    state.zoom.scale > 1 &&
+    !swipeState.isTracking
+  ) {
+    startPanMomentum(momentumSurface, velocityX, velocityY);
+  }
 }
 
 function suppressSwipeClicks(event) {

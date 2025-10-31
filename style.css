@@ -303,14 +303,15 @@ body.theme-dark .close-article {
   color: var(--accent);
 }
 
-.menu-item {
+header button.menu-item {
   --glass-border: transparent;
   --glass-border-hover: transparent;
-  --glass-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
-  --glass-shadow-hover: 0 18px 40px rgba(15, 23, 42, 0.22);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  --glass-shadow: none;
+  --glass-shadow-hover: none;
+  --glass-bg-hover: rgb(213 213 213 / 22%);
+  --glass-color-hover: #212a36;
+  transform: translateY(0px);
+  display: flex;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   width: 100%;
@@ -319,7 +320,13 @@ body.theme-dark .close-article {
   font: inherit;
   cursor: pointer;
   text-decoration: none;
-  transition: color var(--transition);
+  transition: color var(
+  --transition);
+  justify-content: space-between;
+}
+
+body.menu-collapsed header button.menu-item {
+    justify-content: center;
 }
 
 .menu-item span {
@@ -372,9 +379,8 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
   transition-delay: 0s;
 }
 
-.menu-item:hover,
-.menu-item:focus-visible {
-  color: var(--accent);
+header .menu-item:hover:not(:disabled), header .menu-item:focus-visible:not(:disabled) {
+  transform: translateY(0px);
 }
 
 .glass-btn {
@@ -434,12 +440,11 @@ body.theme-dark .glass-btn {
   box-shadow: var(--glass-shadow, 0 20px 50px rgba(2, 6, 23, 0.6));
 }
 
-body.theme-dark .glass-btn:hover:not(:disabled),
-body.theme-dark .glass-btn:focus-visible:not(:disabled) {
-  background: var(--glass-bg-hover, rgba(96, 165, 250, 0.28));
-  color: var(--glass-color-hover, #0b1120);
-  border-color: var(--glass-border-hover, rgba(96, 165, 250, 0.55));
-  box-shadow: var(--glass-shadow-hover, 0 22px 55px rgba(2, 6, 23, 0.65));
+body.theme-dark .glass-btn:hover:not(:disabled), body.theme-dark .glass-btn:focus-visible:not(:disabled) {
+    background: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.1);
+    transform: translateY(0px);
+    color: #fff;
 }
 
 body.theme-dark .glass-btn:focus-visible:not(:disabled) {
@@ -1118,20 +1123,31 @@ body.theme-dark .print-panel__dialog {
   font-size: clamp(1.25rem, 2vw, 1.8rem);
 }
 
-.print-panel__select-all {
-  border-radius: 999px;
-  padding: 0.5rem 1.1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color var(--transition), transform var(--transition);
+.print-panel__select-all, .print-panel__action {
   align-self: flex-start;
-  --glass-color: var(--accent);
-  --glass-color-hover: var(--accent);
+  border-radius: 999px;
+  padding: 0.75rem 1.6rem;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform var(--transition), color var(--transition);
+  --glass-bg: rgba(255, 255, 255, 0.18);
+  --glass-bg-hover: rgb(233 233 233 / 18%);
+  --glass-color: var(--text-muted);
+  --glass-color-hover: var(--text-muted);
+  --glass-border: transparent;
+  --glass-border-hover: transparent;
+  --glass-shadow: 0 6px 25px rgb(83 85 87 / 28%);
+  --glass-shadow-hover: 0 6px 25px rgb(115 117 119 / 28%);
+  --glass-focus-ring: rgba(255, 255, 255, 0.45);
 }
 
-.print-panel__select-all:hover,
-.print-panel__select-all:focus-visible {
-  transform: translateY(-1px);
+body.theme-dark .print-panel__select-all:hover:not(:disabled), body.theme-dark .print-panel__action:hover:not(:disabled) {
+    color: #bbbcbd;
+}
+
+.print-panel is-open .print-panel__select-all:hover, .print-panel is-open .print-panel__select-all:focus-visible {
+  transform: translateY(0px);
 }
 
 .print-panel__close {
@@ -1175,7 +1191,7 @@ body.theme-dark .print-panel__dialog {
   flex-direction: column;
   align-items: center;
   gap: 0.65rem;
-  border: 3px solid transparent;
+  border: 3px solid rgb(15 23 42 / 38%);
   border-radius: 0.9rem;
   padding: 0.75rem;
   background: rgba(255, 255, 255, 0.75);
@@ -1197,6 +1213,7 @@ body.theme-dark .print-panel__dialog {
 body.theme-dark .print-page {
   background: rgba(15, 23, 42, 0.82);
   box-shadow: 0 10px 26px rgba(2, 6, 23, 0.4);
+  border-color: #3b4255;
 }
 
 body.theme-dark .print-page:hover,
@@ -1270,24 +1287,6 @@ body.theme-dark .print-page.is-selected .print-page__badge {
 .print-panel__selection-info {
   font-weight: 600;
   color: var(--text-muted);
-}
-
-.print-panel__action {
-  border-radius: 999px;
-  padding: 0.75rem 1.6rem;
-  font-weight: 700;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: transform var(--transition);
-  --glass-bg: var(--accent);
-  --glass-bg-hover: var(--accent);
-  --glass-color: #fff;
-  --glass-color-hover: #fff;
-  --glass-border: transparent;
-  --glass-border-hover: transparent;
-  --glass-shadow: 0 18px 40px rgba(0, 87, 184, 0.28);
-  --glass-shadow-hover: 0 26px 52px rgba(0, 87, 184, 0.35);
-  --glass-focus-ring: rgba(255, 255, 255, 0.45);
 }
 
 .print-panel__action:hover,
@@ -1394,7 +1393,8 @@ body.theme-dark .print-page.is-selected .print-page__badge {
   --all-pages-border: rgba(15, 23, 42, 0.12);
   --all-pages-shadow: 0 10px 26px rgba(15, 23, 42, 0.2);
   background: var(--all-pages-bg);
-  border: 2px solid var(--all-pages-border);
+  border: 4px solid var(--all-pages-border);
+  box-sizing: content-box;
   box-shadow: var(--all-pages-shadow);
   backdrop-filter: blur(16px) saturate(160%);
   -webkit-backdrop-filter: blur(16px) saturate(160%);
@@ -1469,12 +1469,13 @@ body.theme-dark .all-pages__page span {
 
 body.theme-dark .all-pages__page.is-active {
   --all-pages-bg: rgba(96, 165, 250, 0.16);
-  --all-pages-border: rgba(147, 197, 253, 0.6);
-  --all-pages-shadow: 0 20px 46px rgba(2, 6, 23, 0.55);
+  --all-pages-border: rgb(163 206 255);
+  --all-pages-label: var();
+  --all-pages-label: var(--all-pages-border);
 }
 
 body.theme-dark .all-pages__page.is-active span {
-  color: #0b1120;
+  color: var(--all-pages-label);
 }
 
 .reading-backdrop {

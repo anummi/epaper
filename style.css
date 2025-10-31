@@ -410,9 +410,9 @@ body.menu-animated:not(.menu-collapsed) .menu-item span {
     transform: translateX(-50%);
     width: var(--mobile-spread-gap-width);
     background: var(--bg);
-    border-left: 1px solid var(--border);
-    border-right: 1px solid var(--border);
+    border: none;
     border-radius: var(--mobile-spread-gap-width);
+    box-shadow: 0 0 24px rgba(15, 23, 42, 0.16);
     pointer-events: none;
     opacity: 0;
     transition: opacity var(--transition-fast, 180ms) ease;

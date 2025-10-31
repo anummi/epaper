@@ -672,7 +672,7 @@ body.theme-dark .glass-btn:focus-visible:not(:disabled) {
 
 @media (pointer: coarse) {
   /* Tyylit kosketuslaitteille (esim. puhelimet, tabletit) */
-	.page-image .ad-actions {
+	.page-image .ad-actions, .ads-card .ad-actions {
 	  display: none;
   }
 }

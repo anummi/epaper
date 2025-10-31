@@ -2848,10 +2848,13 @@ body.theme-dark .settings-field--toggle .settings-field__control::after {
     box-shadow: none;
     border-right: none;
     border-radius: 0 1.5rem 1.5rem 0;
-    background: rgba(255, 255, 255, 0.96);
     backdrop-filter: blur(18px);
     padding-inline: clamp(1.25rem, 6vw, 2rem);
   }
+
+	body.mobile-menu-open header button.menu-item {
+ 	   justify-content: space-between;
+	}
 
   body.mobile-menu-open .menu-bar {
     transform: translateX(0);

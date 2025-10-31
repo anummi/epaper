@@ -160,7 +160,7 @@ window.epaperConfig = {
     {
       action: 'search',
       className: 'menu-search',
-      visible: true,
+      visible: false,
       label: { fi: 'Hae', en: 'Search' },
       icon: {
         viewBox: '0 0 512 512',
@@ -180,7 +180,7 @@ window.epaperConfig = {
     {
       action: 'weather',
       className: 'menu-weather',
-      visible: true,
+      visible: false,
       label: { fi: 'Sää', en: 'Weather' },
       icon: {
         viewBox: '0 0 640 512',
